@@ -6,7 +6,8 @@ Accordi che scorrono insieme al brano, con capotasto, trasposizione, diagrammi p
 
 - **YouTube**: cerca un brano o incolla un link. Il video si vede nell'app. Premi **Rileva ascoltando**, fai partire il video con gli altoparlanti accesi e l'app scrive gli accordi sulla linea del tempo ascoltando dal microfono. Dalla volta successiva gli accordi scorrono da soli, sincronizzati con il video.
 - **File audio tuo** (mp3, m4a, wav): accordi, tempo (BPM) e battute vengono rilevati in automatico sul dispositivo.
-- **Accordi**: maggiori, minori e settime (7, maj7, m7), con il basso usato per trovare la fondamentale.
+- **Accordi**: maggiori, minori e settime (7, maj7, m7). Il riconoscimento usa il basso per trovare la fondamentale, dà meno peso alla voce, si adatta a registrazioni non accordate sul La 440 e decide gli accordi sull'intero tratto ascoltato, non su un istante alla volta.
+- **Sincronia**: se gli accordi arrivano un po' prima o dopo la musica, puoi anticiparli o ritardarli di 0,1 s alla volta.
 - **Griglia battute** come in Chordify, con l'accordo per ogni battito. Il tempo si può anche dare con *Tap tempo*, e il pulsante *Allinea alle battute* sistema i cambi di accordo.
 - **Capotasto consigliato**: l'app calcola il capo che ti fa suonare più accordi aperti, e con un file lo imposta da sola.
 - **Tonalità stimata** del brano e delle forme che suoni con il capo.

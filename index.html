@@ -274,6 +274,7 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
           <div style="min-width:0">
             <div class="row between"><span class="label">Ora</span><span class="clock" id="clock">0:00</span></div>
             <div class="nowchord" id="nowChord">—</div>
+            <div class="nextchord" id="realChord" hidden></div>
             <div class="nextchord">Poi: <b id="nextChord">—</b></div>
           </div>
           <div id="diagram"></div>
@@ -311,6 +312,12 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
         <div id="fileTools" class="stack" hidden>
           <div class="progress" aria-hidden="true"><i id="prog"></i></div>
           <p class="hint" id="fileStatus"></p>
+        </div>
+        <div class="row">
+          <span class="label">Sincronia</span>
+          <button type="button" class="sm" id="syncEarlier" title="Gli accordi arrivano tardi: anticipali">◀ Anticipa 0,1 s</button>
+          <button type="button" class="sm" id="syncLater" title="Gli accordi arrivano presto: ritardali">Ritarda 0,1 s ▶</button>
+          <span class="hint" id="syncInfo"></span>
         </div>
         <div class="row editrow">
           <span class="label">Correggi</span>
@@ -406,33 +413,77 @@ function pianoSVG(name){
 }
 function diagram(name){return P.piano?pianoSVG(name):guitarSVG(name)}
 
-/* ================= analysis ================= */
-function addChroma(ch,mag,binHz,minHz,maxHz){
-  let e=0;
-  for(let k=Math.ceil(minHz/binHz);k<mag.length&&k*binHz<maxHz;k++){
-    const m=mag[k]*mag[k];const p=Math.round(12*Math.log2(k*binHz/440))+69;
-    ch[((p%12)+12)%12]+=m;e+=m}
-  return e;
+/* ================= analysis =================
+   1. framePeaks: spectral peaks of one frame (frequency in semitones + log weight)
+   2. tuning: how far the recording sits from A=440, estimated from all peaks
+   3. chroma per frame, then Viterbi decoding over the whole run so that one stray
+      melody note cannot flip the chord: a change must be supported by enough frames
+   4. sevenths decided per segment on the averaged chroma */
+function framePeaks(mag,binHz){
+  const k0=Math.max(1,Math.ceil(55/binHz)),k1=Math.min(mag.length-2,Math.floor(2200/binHz));
+  let mx=0,e=0;for(let k=k0;k<=k1;k++){const m=mag[k];if(m>mx)mx=m;e+=m*m}
+  const pk=[];if(mx<=0)return{pk,e};
+  for(let k=k0;k<=k1;k++){const m=mag[k];
+    if(m<mx*.02||m<mag[k-1]||m<mag[k+1])continue;
+    const a=mag[k-1],c=mag[k+1],d=a-2*m+c,off=d?.5*(a-c)/d:0;
+    const f=(k+Math.max(-.5,Math.min(.5,off)))*binHz;
+    // melody and vocals live mostly above ~900 Hz: they count half
+    pk.push(12*Math.log2(f/440)+69,Math.log1p(40*m/mx)*(f>900?.5:1),f<170?1:0)}
+  return{pk,e};
 }
-// ch: chroma of the whole range; bass: chroma of the low register, used as a hint for the root
-function classify(ch,bass){
-  let mx=0;for(const v of ch)mx=Math.max(mx,v);if(mx<=0)return 'N';
-  const n=ch.map(v=>v/mx);const mean=n.reduce((a,b)=>a+b,0)/12;
-  let bm0=0;if(bass)for(const v of bass)bm0=Math.max(bm0,v);
-  const bn=bass&&bm0>0?bass.map(v=>v/bm0):new Array(12).fill(0);
-  let br=0,bm=false,bs=-1;
-  for(let r=0;r<12;r++)for(const minor of [false,true]){
-    const s=n[r]+n[(r+(minor?3:4))%12]+.8*n[(r+7)%12]-3.6*mean+.7*bn[r];
-    if(s>bs){bs=s;br=r;bm=minor}}
-  if(bs-.7*bn[br]<=.25)return 'N';
-  // sevenths are judged against the strength of the triad itself
-  const tri=(n[br]+n[(br+(bm?3:4))%12]+n[(br+7)%12])/3;
-  const b7=n[(br+10)%12]/tri,M7=n[(br+11)%12]/tri;let suf=bm?'m':'';
-  if(b7>.5&&b7>M7+.25)suf=bm?'m7':'7';
-  else if(!bm&&M7>.5&&M7>b7+.25)suf='maj7';
-  return EN[br]+suf;
+function estimateTuning(frames){
+  let cs=0,sn=0;
+  for(const fr of frames){const p=fr.pk;for(let i=0;i<p.length;i+=3){const a=2*Math.PI*(p[i]-Math.round(p[i]));cs+=p[i+1]*Math.cos(a);sn+=p[i+1]*Math.sin(a)}}
+  return Math.atan2(sn,cs)/(2*Math.PI);
 }
-function modeOf(arr){const c={};let b=null,bc=0;for(const x of arr){c[x]=(c[x]||0)+1;if(c[x]>bc){bc=c[x];b=x}}return{v:b,n:bc}}
+function chromaOf(fr,tune){
+  const ch=new Array(12).fill(0),bass=new Array(12).fill(0);const p=fr.pk;
+  for(let i=0;i<p.length;i+=3){const n=((Math.round(p[i]-tune)%12)+12)%12;ch[n]+=p[i+1];if(p[i+2])bass[n]+=p[i+1]}
+  return{ch,bass};
+}
+const TRIADS=[];for(let r=0;r<12;r++){TRIADS.push({r,m:false,iv:[0,4,7]});TRIADS.push({r,m:true,iv:[0,3,7]})}
+function emissions(ch,bass){
+  const nrm=Math.hypot(...ch);const out=new Float32Array(TRIADS.length);if(!nrm)return out;
+  let bm=0;for(const v of bass)bm=Math.max(bm,v);
+  TRIADS.forEach((T,i)=>{let s=0;T.iv.forEach((v,j)=>s+=ch[(T.r+v)%12]*(j===0?1.1:1));
+    out[i]=s/(nrm*Math.sqrt(3.21))+(bm?.3*bass[T.r]/bm:0)});
+  return out;
+}
+// frames: [{t,pk,e}] sorted by t, roughly evenly spaced. Returns [{t,c}]
+function decodeChords(frames,tune,quietE){
+  const n=frames.length;if(!n)return[];
+  const S=TRIADS.length,NS=S; // index S = no chord
+  const dt=n>1?(frames[n-1].t-frames[0].t)/(n-1):.1;
+  const lambda=Math.max(.4,.11/dt); // cost of a chord change, about 1.1 s of 0.1-better evidence
+  const chs=frames.map(fr=>chromaOf(fr,tune));
+  let score=new Float32Array(S+1),back=[];
+  for(let i=0;i<n;i++){
+    const quiet=frames[i].e<quietE||!frames[i].pk.length;
+    const em=quiet?new Float32Array(S):emissions(chs[i].ch,chs[i].bass);
+    const emN=quiet?1:.55;
+    let best=0;for(let j=1;j<=S;j++)if(score[j]>score[best])best=j;
+    const bk=new Uint8Array(S+1),ns=new Float32Array(S+1);
+    for(let j=0;j<=S;j++){const stay=score[j],sw=score[best]-lambda;
+      if(i===0||stay>=sw){ns[j]=stay;bk[j]=j}else{ns[j]=sw;bk[j]=best}
+      ns[j]+=j===NS?emN:em[j]}
+    back.push(bk);score=ns}
+  let j=0;for(let k=1;k<=S;k++)if(score[k]>score[j])j=k;
+  const path=new Array(n);for(let i=n-1;i>=0;i--){path[i]=j;j=back[i][j]}
+  const out=[];
+  for(let i=0;i<n;){let k=i;const st=path[i];const avg=new Array(12).fill(0);
+    while(k<n&&path[k]===st){chs[k].ch.forEach((v,q)=>avg[q]+=v);k++}
+    out.push({t:+frames[i].t.toFixed(2),c:st===NS?'N':nameTriad(TRIADS[st],avg)});i=k}
+  return out.filter((x,i,a)=>i===0||x.c!==a[i-1].c);
+}
+// add 7 / maj7 / m7 when the averaged chroma of the segment clearly carries the seventh
+function nameTriad(T,avg){
+  let mx=0;for(const v of avg)mx=Math.max(mx,v);const n=avg.map(v=>v/(mx||1));
+  const tri=(n[T.r]+n[(T.r+(T.m?3:4))%12]+n[(T.r+7)%12])/3||1;
+  const b7=n[(T.r+10)%12]/tri,M7=n[(T.r+11)%12]/tri;let suf=T.m?'m':'';
+  if(b7>.7&&b7>M7+.25)suf=T.m?'m7':'7';else if(!T.m&&M7>.7&&M7>b7+.25)suf='maj7';
+  return EN[T.r]+suf;
+}
+function quietLevel(frames){const es=frames.map(f=>f.e).sort((a,b)=>a-b);return (es[Math.floor(es.length*.95)]||0)*.004}
 function fft(re,im){const n=re.length;
   for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){[re[i],re[j]]=[re[j],re[i]];[im[i],im[j]]=[im[j],im[i]]}}
   for(let len=2;len<=n;len<<=1){const a=-2*Math.PI/len,wr=Math.cos(a),wi=Math.sin(a);
@@ -468,22 +519,19 @@ async function analyzeFile(buf,onProgress){
   const data=(await off.startRendering()).getChannelData(0);
   const win=new Float32Array(N).map((_,i)=>.5-.5*Math.cos(2*Math.PI*i/(N-1)));
   const re=new Float32Array(N),im=new Float32Array(N),mag=new Float32Array(N/2);
-  const frames=[];let maxE=0;
+  const frames=[];
   for(let p=0,f=0;p+N<=data.length;p+=HOP,f++){
     for(let i=0;i<N;i++){re[i]=data[p+i]*win[i];im[i]=0}
     fft(re,im);for(let k=0;k<N/2;k++)mag[k]=Math.hypot(re[k],im[k]);
-    const ch=new Array(12).fill(0),bass=new Array(12).fill(0);const e=addChroma(ch,mag,SR/N,60,2000);addChroma(bass,mag,SR/N,40,160);
-    frames.push({t:(p+N/2)/SR,ch,bass,e});maxE=Math.max(maxE,e);
-    if(f%40===0){onProgress(.9*p/data.length);await new Promise(r=>setTimeout(r))}}
-  const raw=frames.map(fr=>fr.e<maxE*.003?'N':classify(fr.ch,fr.bass));
-  const sm=raw.map((_,i)=>modeOf(raw.slice(Math.max(0,i-6),i+7)).v);
-  let track=[];
-  sm.forEach((c,i)=>{if(!track.length||track[track.length-1].c!==c)track.push({t:+frames[i].t.toFixed(2),c})});
-  track=dropShort(track,.6,buf.duration);
+    const fp=framePeaks(mag,SR/N);fp.t=(p+N/2)/SR;frames.push(fp);
+    if(f%40===0){onProgress(.85*p/data.length);await new Promise(r=>setTimeout(r))}}
+  const tune=estimateTuning(frames);
+  let track=decodeChords(frames,tune,quietLevel(frames));
+  track=dropShort(track,.5,buf.duration);
   if(track.length)track[0].t=0;
   onProgress(.95);await new Promise(r=>setTimeout(r));
   const tempo=estimateTempo(data,SR);
-  onProgress(1);return{track,tempo};
+  onProgress(1);return{track,tempo,tune};
 }
 function dropShort(track,min,dur){
   for(let changed=true;changed;){changed=false;
@@ -644,6 +692,7 @@ function openSong(s){
     au.hidden=false;src=fileSrc;
     if(s._fileUrl)au.src=s._fileUrl;
     else{au.removeAttribute('src');$('fileStatus').textContent='Accordi salvati. Per riascoltare il brano, riapri lo stesso file con “Apri un file audio dal dispositivo”.';$('prog').style.width='0'}}
+  $('syncInfo').textContent=s.sync?`spostati di ${s.sync>0?'+':''}${s.sync.toFixed(1).replace('.',',')} s`:'';
   applySpeed();refreshAll();
 }
 $('fileIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
@@ -659,8 +708,7 @@ $('fileIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f
     const buf=await ctx.decodeAudioData(await f.arrayBuffer());ctx.close();
     const r=await analyzeFile(buf,p=>{$('prog').style.width=Math.round(p*100)+'%';$('fileStatus').textContent='Analisi del brano… '+Math.round(p*100)+'%'});
     s.track=r.track;if(r.tempo){s.bpm=r.tempo.bpm;s.beat0=r.tempo.beat0;snapTrack(s)}
-    $('fileStatus').textContent=`Fatto: ${s.track.length} cambi di accordo${s.bpm?', tempo circa '+Math.round(s.bpm)+' BPM':''}. Premi play.`;
-    const sug=suggestCapo(s);if(sug&&sug.capo&&sug.easy>sug.current+.1)s.capo=sug.capo;
+    $('fileStatus').textContent=`Fatto: ${s.track.length} cambi di accordo${s.bpm?', tempo circa '+Math.round(s.bpm)+' BPM':''}${Math.abs(r.tune)>.08?`, registrazione accordata ${r.tune>0?'+':''}${Math.round(r.tune*100)} cent rispetto al La 440`:''}. Premi play.`;
     persist();if(song===s)refreshAll();
   }catch(err){$('fileStatus').textContent='Non riesco a leggere questo file audio. Prova con un mp3, m4a o wav.'}
 };
@@ -770,6 +818,8 @@ function frame(){
       const el=$('strip').querySelector(`[data-i="${i}"]`);if(el)el.classList.add('cur');
       const n=shiftN();const c=i>=0?song.track[i].c:'N';const sc=shiftC(c,n,P.simple);
       $('nowChord').textContent=show(sc);
+      $('realChord').hidden=!song.capo||c==='N';
+      if(song.capo&&c!=='N')$('realChord').innerHTML=`Forma con capo ${song.capo} · suona come <b>${esc(show(shiftC(c,song.transpose||0,P.simple)))}</b>`;
       const nx=song.track.slice(i+1).find(x=>x.c!=='N');
       $('nextChord').textContent=nx?show(shiftC(nx.c,n,P.simple)):'—';
       $('diagram').innerHTML=c!=='N'?diagram(sc):'';
@@ -814,50 +864,75 @@ $('fixReplace').onclick=()=>{const c=readFix();if(!c||!src)return;const i=idxAt(
 $('fixInsert').onclick=()=>{const c=readFix();if(!c||!src)return;let t=+src.time().toFixed(2);
   if(song.bpm){const B=60/song.bpm,k=Math.round((t-song.beat0)/B);t=+Math.max(0,song.beat0+k*B).toFixed(3)}
   song.track=song.track.filter(x=>Math.abs(x.t-t)>.01);song.track.push({t,c});changed();toast('Accordo inserito a '+fmt(t))};
+function shiftTrack(d){if(!song||!song.track.length)return;
+  song.track.forEach((x,i)=>{if(i>0||x.t>0)x.t=+Math.max(0,x.t+d).toFixed(3)});
+  if(song.bpm)song.beat0=+((song.beat0||0)+d).toFixed(3);
+  song.sync=+((song.sync||0)+d).toFixed(2);$('syncInfo').textContent=song.sync?`spostati di ${song.sync>0?'+':''}${song.sync.toFixed(1).replace('.',',')} s`:'';
+  persist();refreshAll()}
+$('syncEarlier').onclick=()=>shiftTrack(-.1);
+$('syncLater').onclick=()=>shiftTrack(.1);
 $('fixDelete').onclick=()=>{if(!src)return;const i=idxAt(src.time());if(i<0)return;song.track.splice(i,1);changed()};
 
 /* ================= microphone: shared ================= */
 async function openMic(){return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
 
-/* listen while YouTube plays */
+/* listen while YouTube plays.
+   Every tick stores the spectral peaks with the video time they belong to; every second the
+   whole listened stretch is decoded again and written into the track, so chords improve as
+   more of the song is heard and re-listening a passage replaces it. */
 let L=null;
+const MIC_DELAY=.3; // analysis window centre + audio output/input latency, in seconds
 async function startListening(){
   stopTuner();
   try{
     const stream=await openMic();
     const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const an=ctx.createAnalyser();an.fftSize=16384;an.smoothingTimeConstant=.5;
+    const an=ctx.createAnalyser();an.fftSize=16384;an.smoothingTimeConstant=0;
     ctx.createMediaStreamSource(stream).connect(an);
-    L={stream,ctx,an,db:new Float32Array(an.frequencyBinCount),mag:new Float32Array(an.frequencyBinCount),hist:[],stable:null,lastT:null,ticks:0};
-    L.timer=setInterval(listenTick,150);
+    L={stream,ctx,an,db:new Float32Array(an.frequencyBinCount),mag:new Float32Array(an.frequencyBinCount),frames:new Map(),ticks:0,lastT:null};
+    L.timer=setInterval(listenTick,100);
     $('listenBtn').classList.add('on');$('listenBtn').textContent='■ Ferma rilevamento';
     $('listenStatus').textContent=src.playing()?'Ascolto…':'Avvia il video: inizio ad ascoltare quando parte.';
   }catch(err){$('listenStatus').textContent='Microfono non disponibile. Consenti l\'accesso al microfono nel browser e riprova.'}
 }
-function stopListening(){if(!L)return;clearInterval(L.timer);L.stream.getTracks().forEach(t=>t.stop());L.ctx.close();L=null;
+function stopListening(){if(!L)return;clearInterval(L.timer);applyListened();L.stream.getTracks().forEach(t=>t.stop());L.ctx.close();L=null;
   $('listenBtn').classList.remove('on');$('listenBtn').textContent='● Rileva ascoltando';$('listenStatus').textContent='';$('meter').style.width='0';
   if(song){persist();refreshAll()}}
 $('listenBtn').onclick=()=>L?stopListening():startListening();
 function listenTick(){
   if(!song||song.kind!=='yt')return;
   L.an.getFloatFrequencyData(L.db);
-  for(let k=0;k<L.db.length;k++)L.mag[k]=Math.pow(10,L.db[k]/20);
-  const binHz=L.ctx.sampleRate/L.an.fftSize;
-  const ch=new Array(12).fill(0),bass=new Array(12).fill(0);const e=addChroma(ch,L.mag,binHz,60,2000);addChroma(bass,L.mag,binHz,40,160);
-  $('meter').style.width=Math.min(100,Math.max(0,(10*Math.log10(e+1e-12)+70)*2))+'%';
-  if(!src.playing()){L.hist=[];L.lastT=null;$('listenStatus').textContent='In pausa: riprendo quando il video riparte.';return}
-  $('listenStatus').textContent='Ascolto…';
+  for(let k=0;k<L.db.length;k++)L.mag[k]=L.db[k]>-200?Math.pow(10,L.db[k]/20):0;
+  const fp=framePeaks(L.mag,L.ctx.sampleRate/L.an.fftSize);
+  $('meter').style.width=Math.min(100,Math.max(0,(10*Math.log10(fp.e+1e-12)+70)*2))+'%';
+  if(!src.playing()){L.lastT=null;$('listenStatus').textContent='In pausa: riprendo quando il video riparte.';return}
   const t=src.time();
-  if(L.lastT===null||t<L.lastT||t-L.lastT>2){L.lastT=t;L.hist=[];return}
-  L.hist.push(e<1e-7?'N':classify(ch,bass));if(L.hist.length>6)L.hist.shift();
-  const m=modeOf(L.hist);if(m.n>=4)L.stable=m.v;
-  // what is detected now replaces whatever was written since the previous tick
-  const from=L.lastT;song.track=song.track.filter(x=>!(x.t>from&&x.t<=t));
-  if(L.stable){const i=idxAt(t);const curC=i>=0?song.track[i].c:null;
-    if(curC!==L.stable)song.track.push({t:+Math.max(0,t-.45).toFixed(2),c:L.stable})}
-  L.lastT=t;song.track.sort((a,b)=>a.t-b.t);
-  buildStrip();lastIdx=-2;
-  if(++L.ticks%20===0){persist();buildGrid();renderRail()}
+  // skip the first moments after a seek or resume: the microphone still hears the old position
+  if(L.lastT===null||t<L.lastT-.05||t-L.lastT>1){L.lastT=t;L.settle=3;return}
+  L.lastT=t;if(L.settle>0){L.settle--;return}
+  const rate=yt&&yt.getPlaybackRate?yt.getPlaybackRate():1;
+  fp.t=Math.max(0,t-MIC_DELAY*rate);
+  L.frames.set(Math.round(fp.t*10),fp);
+  $('listenStatus').textContent=`Ascolto… ${Math.round(L.frames.size/10)} s ascoltati`;
+  if(++L.ticks%10===0)applyListened();
+}
+function applyListened(){
+  if(!L||!L.frames.size||!song)return;
+  const all=[...L.frames.values()].sort((a,b)=>a.t-b.t);
+  const tune=estimateTuning(all),quiet=quietLevel(all);
+  // decode each continuous stretch on its own
+  const runs=[];let cur=[all[0]];
+  for(let i=1;i<all.length;i++){if(all[i].t-all[i-1].t>.6){runs.push(cur);cur=[]}cur.push(all[i])}
+  runs.push(cur);
+  for(const run of runs){if(run.length<5)continue;
+    const a=run[0].t,b=run[run.length-1].t+.1;
+    const dec=dropShort(decodeChords(run,tune,quiet),.45,b);
+    const before=song.track.filter(x=>x.t<a-1e-3),after=song.track.filter(x=>x.t>=b);
+    const prevC=before.length?before[before.length-1].c:null;
+    const mid=dec.filter((x,i)=>!(i===0&&x.c===prevC));
+    song.track=[...before,...mid,...after]}
+  song.track=song.track.filter((x,i,arr)=>i===0||x.c!==arr[i-1].c);
+  persist();buildStrip();lastIdx=-2;if(L.ticks%30===0){buildGrid();renderRail()}
 }
 
 /* tuner */
