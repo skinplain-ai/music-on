@@ -179,6 +179,12 @@ svg.diag{width:100%;height:auto;color:var(--ink)}
 .playhead{position:absolute;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--accent);left:30%;pointer-events:none}
 .tlempty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;padding:8px;text-align:center}
 
+.chordset{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.cs{flex:none;width:100px;flex-direction:column;gap:2px;padding:8px 6px 4px;border-radius:12px}
+.cs b{font-family:var(--display);font-size:22px;font-weight:700;line-height:1}
+.cs svg.diag{width:78px}
+.cs.cur{border-color:var(--now);background:color-mix(in srgb,var(--now) 16%,var(--surface))}
+#diagram{cursor:pointer}
 .suggest{font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);border-radius:12px;padding:10px 14px}
 .suggest .grow{flex:1;min-width:200px}
 
@@ -392,6 +398,14 @@ dialog.sheet::backdrop{background:rgba(5,8,12,.45)}
         <div class="playhead"></div>
         <div class="tlempty" id="tlEmpty">Ancora nessun accordo. Apri “Rileva e correggi” e premi “Rileva ascoltando”.</div>
       </div>
+      <section class="card stack" id="chordSetBox" hidden>
+        <div class="row between">
+          <span class="subhead">Accordi del brano</span>
+          <div class="seg" role="group" aria-label="Tipo di accordi"><button type="button" data-mode="easy">Facili per chitarra</button><button type="button" data-mode="full">Completi</button><button type="button" data-mode="basic">Base</button></div>
+        </div>
+        <div class="chordset" id="chordSet"></div>
+        <p class="hint">Tocca un diagramma per vedere un'altra posizione sul manico.</p>
+      </section>
       <div class="suggest" id="suggest" hidden></div>
 
       <div class="segtabs" role="tablist">
@@ -485,8 +499,8 @@ dialog.sheet::backdrop{background:rgba(5,8,12,.45)}
           <div class="seg" role="group" aria-label="Strumento"><button type="button" data-pref="piano" data-val="0">Chitarra</button><button type="button" data-pref="piano" data-val="1">Pianoforte</button></div></div>
         <div class="setrow"><span>Chitarra per mancini</span>
           <div class="seg" role="group" aria-label="Mancini"><button type="button" data-pref="lefty" data-val="0">No</button><button type="button" data-pref="lefty" data-val="1">Sì</button></div></div>
-        <div class="setrow"><span>Accordi semplificati</span>
-          <div class="seg" role="group" aria-label="Accordi semplificati"><button type="button" data-pref="simple" data-val="0">No</button><button type="button" data-pref="simple" data-val="1">Sì</button></div></div>
+        <div class="setrow"><span>Accordi</span>
+          <div class="seg" role="group" aria-label="Accordi"><button type="button" data-pref="chords" data-val="easy">Facili per chitarra</button><button type="button" data-pref="chords" data-val="full">Completi</button><button type="button" data-pref="chords" data-val="basic">Solo maggiori e minori</button></div></div>
       </div>
       <div class="card stack">
         <div class="label">Libreria</div>
@@ -534,57 +548,97 @@ function parseChord(s){const m=CHORD_RE.exec(s||'');if(!m)return null;
   return{root:pc(m[1],m[2]),suf:m[3],bass:m[4]?pc(m[4],m[5]):null}}
 function canon(c){return EN[c.root]+c.suf+(c.bass!==null?'/'+EN[c.bass]:'')}
 function simpleSuf(s){return /^m(?!aj)/.test(s)||/^dim/.test(s)?'m':''}
-// shift a stored chord by n semitones; returns canonical English name (optionally simplified)
-function shiftC(s,n,simple){if(!s||s==='N')return 'N';const c=parseChord(s);if(!c)return s;
-  return canon({root:(c.root+n+120)%12,suf:simple?simpleSuf(c.suf):c.suf,bass:simple?null:(c.bass===null?null:(c.bass+n+120)%12)})}
-function noteName(p){return (P.it?IT:EN)[(p+12)%12]}
+// guitar-friendly reduction of extended chords to what a guitarist would actually strum
+const EASY_MAP={maj7:'',m7b5:'m',dim:'m',dim7:'7','9':'7',m9:'m7','6':'',m6:'m',add9:'','7sus4':'7',aug:'',maj9:''};
+function easySuf(root,s){
+  if(['','m','7','m7','sus2','sus4'].includes(s)||OV[EN[root]+s])return s;  // keep it when it has a comfortable shape
+  return s in EASY_MAP?EASY_MAP[s]:simpleSuf(s)}
+// shift a stored chord by n semitones; returns the canonical English name.
+// mode: 'full' as detected, 'easy' guitar-friendly (no slash bass, no awkward extensions), 'basic' only major/minor
+function shiftC(s,n,mode){if(!s||s==='N')return 'N';const c=parseChord(s);if(!c)return s;
+  const root=(c.root+n+120)%12;
+  const suf=mode==='basic'?simpleSuf(c.suf):mode==='easy'?easySuf(root,c.suf):c.suf;
+  return canon({root,suf,bass:mode==='full'&&c.bass!==null?(c.bass+n+120)%12:null})}
+// note spelling follows the key of the song: sharps in G/D/A/E/B keys, flats in F/Bb/Eb keys
+const SH=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],FL=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const IT_SH=['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si'],IT_FL=['Do','Reb','Re','Mib','Mi','Fa','Solb','Sol','Lab','La','Sib','Si'];
+let spell=null;
+function setSpelling(key){
+  if(!key){spell=null;return}
+  const r=((key.root%12)+12)%12;
+  const flat=key.minor?[2,7,0,5,10,3]:[5,10,3,8,1];
+  const sharp=key.minor?[4,11,6,1,8]:[7,2,9,4,11,6];
+  spell=flat.includes(r)?'flat':sharp.includes(r)?'sharp':null}
+function noteName(p){p=((p%12)+12)%12;
+  if(spell==='sharp')return (P.it?IT_SH:SH)[p];if(spell==='flat')return (P.it?IT_FL:FL)[p];return (P.it?IT:EN)[p]}
 function show(s){if(s==='N')return '—';const c=parseChord(s);if(!c)return s;return noteName(c.root)+c.suf+(c.bass!==null?'/'+noteName(c.bass):'')}
+const chordMode=()=>P.chords||'easy';
 const QUAL={'':[0,4,7],m:[0,3,7],'7':[0,4,7,10],maj7:[0,4,7,11],m7:[0,3,7,10],sus4:[0,5,7],sus2:[0,2,7],dim:[0,3,6],dim7:[0,3,6,9],aug:[0,4,8],
   add9:[0,4,7,14],'6':[0,4,7,9],m6:[0,3,7,9],'9':[0,4,7,10,14],m9:[0,3,7,10,14],'7sus4':[0,5,7,10],m7b5:[0,3,6,10]};
 function intervals(suf){return QUAL[suf]||QUAL[simpleSuf(suf)]}
 
-/* guitar shapes, low E → high e; -1 = muted */
-const OPEN={C:[-1,3,2,0,1,0],A:[-1,0,2,2,2,0],G:[3,2,0,0,0,3],E:[0,2,2,1,0,0],D:[-1,-1,0,2,3,2],
- Am:[-1,0,2,2,1,0],Em:[0,2,2,0,0,0],Dm:[-1,-1,0,2,3,1],C7:[-1,3,2,3,1,0],A7:[-1,0,2,0,2,0],G7:[3,2,0,0,0,1],
- E7:[0,2,0,1,0,0],D7:[-1,-1,0,2,1,2],B7:[-1,2,1,2,0,2],Am7:[-1,0,2,0,1,0],Em7:[0,2,0,0,0,0],Dm7:[-1,-1,0,2,1,1],
- Cmaj7:[-1,3,2,0,0,0],Fmaj7:[-1,-1,3,2,1,0],Amaj7:[-1,0,2,1,2,0],Dmaj7:[-1,-1,0,2,2,2],Gmaj7:[3,2,0,0,0,2],Emaj7:[0,2,1,1,0,0],
- Asus4:[-1,0,2,2,3,0],Dsus4:[-1,-1,0,2,3,3],Esus4:[0,2,2,2,0,0],Asus2:[-1,0,2,2,0,0],Dsus2:[-1,-1,0,2,3,0],Cadd9:[-1,3,2,0,3,0],
- A7sus4:[-1,0,2,0,3,0],E7sus4:[0,2,0,2,0,0],G6:[3,2,0,0,0,0],C6:[-1,3,2,2,1,0],A6:[-1,0,2,2,2,2],Am6:[-1,0,2,2,1,2],
- Bm7:[-1,2,0,2,0,2],Bdim:[-1,2,3,4,3,-1],Fsus2:[-1,-1,3,0,1,1]};
-const EASY=new Set(Object.keys(OPEN).filter(k=>!['Bdim','Bm7','Fsus2'].includes(k)));
-const ESH={'':[0,2,2,1,0,0],m:[0,2,2,0,0,0],'7':[0,2,0,1,0,0],m7:[0,2,0,0,0,0],sus4:[0,2,2,2,0,0],'7sus4':[0,2,0,2,0,0],maj7:[0,-1,1,1,0,-1]};
-const ASH={'':[-1,0,2,2,2,0],m:[-1,0,2,2,1,0],'7':[-1,0,2,0,2,0],m7:[-1,0,2,0,1,0],maj7:[-1,0,2,1,2,0],sus4:[-1,0,2,2,3,0],sus2:[-1,0,2,2,0,0],
-  '6':[-1,0,2,2,2,2],m6:[-1,0,2,2,1,2],'7sus4':[-1,0,2,0,3,0],dim7:[-1,0,1,2,1,2],m7b5:[-1,0,1,0,1,-1],dim:[-1,0,1,2,1,-1]};
-function shapeFor(name){
-  const c=parseChord(name);if(!c)return null;
-  const key=EN[c.root]+c.suf;
-  if(OPEN[key])return{frets:OPEN[key],barre:0,simplified:false};
-  let q=c.suf,simplified=false;
-  if(!(q in ESH)&&!(q in ASH)){simplified=true;q=simpleSuf(q)}
-  const opts=[];
-  if(ESH[q])opts.push({r:(c.root-4+12)%12||12,t:ESH[q]});
-  if(ASH[q])opts.push({r:(c.root-9+12)%12||12,t:ASH[q]});
-  opts.sort((a,b)=>a.r-b.r);const o=opts[0];
-  return{frets:o.t.map(f=>f<0?-1:f+o.r),barre:o.r,simplified};
+/* guitar voicings, strings low E → high e. Each entry: frets ('x' = muted) and fingers (0 = open).
+   OV: open-position chords; ESH/ASH: movable barre shapes with the root on the 6th / 5th string,
+   frets relative to the barre. */
+const OV={C:[['x32010','x32010']],A:[['x02220','x01230']],G:[['320003','210003'],['320033','210034']],E:[['022100','023100']],D:[['xx0232','xx0132']],
+ Am:[['x02210','x02310']],Em:[['022000','023000']],Dm:[['xx0231','xx0231']],
+ C7:[['x32310','x32410']],A7:[['x02020','x02030']],G7:[['320001','320001']],E7:[['020100','020100']],D7:[['xx0212','xx0213']],B7:[['x21202','x21304']],
+ Am7:[['x02010','x02010']],Em7:[['020000','020000']],Dm7:[['xx0211','xx0211']],
+ Cmaj7:[['x32000','x32000']],Fmaj7:[['xx3210','xx3210']],Amaj7:[['x02120','x02130']],Dmaj7:[['xx0222','xx0111']],Gmaj7:[['320002','320001']],Emaj7:[['021100','031200']],
+ Asus4:[['x02230','x01230']],Dsus4:[['xx0233','xx0134']],Esus4:[['022200','023400']],Asus2:[['x02200','x01200']],Dsus2:[['xx0230','xx0130']],Cadd9:[['x32030','x21030']],
+ A7sus4:[['x02030','x02030']],E7sus4:[['020200','020300']],G6:[['320000','320000']],C6:[['x32210','x42310']],A6:[['x02222','x01111']],Am6:[['x02212','x02314']],
+ F:[['xx3211','xx3211']],Fsus2:[['xx3011','xx3011']],Bm7:[['x20202','x20304']]};
+const EASY=new Set(Object.keys(OV).filter(k=>!['F','Fsus2','Bm7'].includes(k)));
+const ESH={'':['022100','134211'],m:['022000','134111'],'7':['020100','131211'],m7:['020000','131111'],sus4:['022200','134411'],'7sus4':['020200','131411']};
+const ASH={'':['x02220','x13331'],m:['x02210','x13421'],'7':['x02020','x13141'],m7:['x02010','x13121'],maj7:['x02120','x13241'],sus4:['x02230','x12341'],
+  sus2:['x02200','x13411'],'6':['x02222','x11111'],'7sus4':['x02030','x13141'],dim:['x0121x','x1243x'],m7b5:['x0101x','x1324x'],dim7:['x01212','x12131']};
+// movable shapes with the root on the 4th string (e.g. Eb = xx1343): four strings, often the comfortable choice
+const DSH={'':['xx0232','xx1243'],m:['xx0231','xx1342'],'7':['xx0212','xx1324'],m7:['xx0211','xx1211']};
+function mkVoicing([fr,fi],r,kind){return{frets:[...fr].map(ch=>ch==='x'?-1:+ch+r),fingers:[...fi].map(ch=>ch==='x'?0:+ch),kind,pos:r}}
+// all voicings for a chord, easiest first
+function voicings(name){
+  const c=parseChord(name);if(!c)return{list:[],simplified:false};
+  let suf=c.suf,simplified=false;
+  const list=[];(OV[EN[c.root]+suf]||[]).forEach(v=>list.push(mkVoicing(v,0,'open')));
+  if(!list.length&&!(suf in ESH)&&!(suf in ASH)){simplified=true;suf=simpleSuf(suf);(OV[EN[c.root]+suf]||[]).forEach(v=>list.push(mkVoicing(v,0,'open')))}
+  const rE=(c.root-4+12)%12||12,rA=(c.root-9+12)%12||12;
+  if(ESH[suf])list.push(mkVoicing(ESH[suf],rE,'E'));
+  if(ASH[suf])list.push(mkVoicing(ASH[suf],rA,'A'));
+  const rD=(c.root-2+12)%12||12;if(DSH[suf]&&rD<=7)list.push(mkVoicing(DSH[suf],rD,'D'));
+  const seen=new Set();
+  const out=list.filter(v=>{const k=v.frets.join();if(seen.has(k))return false;seen.add(k);return true})
+    .sort((a,b)=>(a.kind==='open'?0:1)-(b.kind==='open'?0:1)||(a.kind==='open'?0:a.pos-b.pos));
+  return{list:out,simplified};
 }
-function guitarSVG(name){
-  const s=shapeFor(name);if(!s)return '';
-  const frets=P.lefty?s.frets.slice().reverse():s.frets;
-  const played=frets.filter(f=>f>0);const max=Math.max(0,...played);
-  const base=max<=4?1:Math.min(...played);
-  const W=120,H=150,x0=18,y0=28,sx=(W-x0-10)/5,sy=22;
+function voicingFor(name){const v=voicings(name);if(!v.list.length)return null;
+  const i=((P.vo&&P.vo[name])||0)%v.list.length;return{...v.list[i],idx:i,count:v.list.length,simplified:v.simplified}}
+function cycleVoicing(name){const v=voicings(name);if(v.list.length<2)return;P.vo=P.vo||{};P.vo[name]=(((P.vo[name]||0)+1)%v.list.length);save()}
+function guitarSVG(name,small){
+  const s=voicingFor(name);if(!s)return '';
+  let frets=s.frets,fingers=s.fingers;if(P.lefty){frets=frets.slice().reverse();fingers=fingers.slice().reverse()}
+  const played=frets.filter(f=>f>0);const max=Math.max(0,...played),min=played.length?Math.min(...played):1;
+  const base=max<=4?1:min;
+  // barre: index finger holding two or more strings on the same fret
+  const ones=frets.map((f,i)=>fingers[i]===1&&f>0?i:-1).filter(i=>i>=0);
+  const bf=ones.length>=2&&ones.every(i=>frets[i]===frets[ones[0]])?frets[ones[0]]:0;
+  const W=124,H=152,x0=22,y0=28,sx=(W-x0-10)/5,sy=23;
   let g=`<svg class="diag" viewBox="0 0 ${W} ${H}" role="img" aria-label="Diagramma ${esc(show(name))}">`;
-  for(let i=0;i<6;i++)g+=`<line x1="${x0+i*sx}" y1="${y0}" x2="${x0+i*sx}" y2="${y0+5*sy}" stroke="currentColor" stroke-width="1"/>`;
-  for(let j=0;j<=5;j++)g+=`<line x1="${x0}" y1="${y0+j*sy}" x2="${x0+5*sx}" y2="${y0+j*sy}" stroke="currentColor" stroke-width="${j===0&&base===1?4:1}"/>`;
-  if(base>1)g+=`<text x="2" y="${y0+sy*.7}" font-size="11" fill="currentColor" font-family="JetBrains Mono,monospace">${base}</text>`;
-  const isBarre=s.barre>0&&base===s.barre;
-  if(isBarre){const idx=frets.map((f,i)=>f>=s.barre?i:-1).filter(i=>i>=0);const a=Math.min(...idx),b=Math.max(...idx);
-    g+=`<rect x="${x0+a*sx-5}" y="${y0+.5*sy-5}" width="${(b-a)*sx+10}" height="10" rx="5" fill="var(--accent)"/>`}
+  for(let i=0;i<6;i++)g+=`<line x1="${x0+i*sx}" y1="${y0}" x2="${x0+i*sx}" y2="${y0+5*sy}" stroke="currentColor" stroke-width="${1+(P.lefty?i:5-i)*.18}"/>`;
+  for(let j=0;j<=5;j++)g+=`<line x1="${x0}" y1="${y0+j*sy}" x2="${x0+5*sx}" y2="${y0+j*sy}" stroke="currentColor" stroke-width="${j===0&&base===1?4.5:1}"/>`;
+  if(base>1)g+=`<text x="${x0-7}" y="${y0+sy*.68}" font-size="12" text-anchor="end" fill="currentColor" font-family="JetBrains Mono,monospace">${base}</text>`;
+  if(bf){const a=Math.min(...ones),b=Math.max(...ones),cy=y0+(bf-base+.5)*sy;
+    g+=`<rect x="${x0+a*sx-7}" y="${cy-7}" width="${(b-a)*sx+14}" height="14" rx="7" fill="var(--accent)"/>`;
+    if(!small)g+=`<text x="${x0+a*sx}" y="${cy+4}" font-size="10" text-anchor="middle" font-weight="700" fill="var(--accent-ink)">1</text>`}
   frets.forEach((f,i)=>{const x=x0+i*sx;
-    if(f<0)g+=`<text x="${x}" y="${y0-8}" font-size="11" text-anchor="middle" fill="currentColor">×</text>`;
-    else if(f===0)g+=`<circle cx="${x}" cy="${y0-12}" r="4" fill="none" stroke="currentColor" stroke-width="1.3"/>`;
-    else if(!(isBarre&&f===s.barre))g+=`<circle cx="${x}" cy="${y0+(f-base+.5)*sy}" r="6.5" fill="var(--accent)"/>`});
-  return g+'</svg>'+(s.simplified?'<p class="simpl">Forma semplificata</p>':'');
+    if(f<0)g+=`<text x="${x}" y="${y0-8}" font-size="12" text-anchor="middle" fill="currentColor">×</text>`;
+    else if(f===0)g+=`<circle cx="${x}" cy="${y0-12}" r="4.2" fill="none" stroke="currentColor" stroke-width="1.4"/>`;
+    else if(!(bf&&f===bf&&fingers[i]===1)){const cy=y0+(f-base+.5)*sy;
+      g+=`<circle cx="${x}" cy="${cy}" r="8" fill="var(--accent)"/>`;
+      if(!small&&fingers[i])g+=`<text x="${x}" y="${cy+4}" font-size="11" text-anchor="middle" font-weight="700" fill="var(--accent-ink)">${fingers[i]}</text>`}});
+  g+='</svg>';
+  if(small)return g;
+  const notes=[];if(s.count>1)notes.push(`Posizione ${s.idx+1} di ${s.count} · tocca per cambiare`);if(s.simplified)notes.push('Forma semplificata');
+  return g+(notes.length?`<p class="simpl">${notes.join(' · ')}</p>`:'');
 }
 function pianoSVG(name){
   const c=parseChord(name);if(!c)return '';
@@ -592,12 +646,12 @@ function pianoSVG(name){
   const WH=[0,2,4,5,7,9,11],W=14,kw=170/W;
   let g=`<svg class="diag" viewBox="0 0 172 92" role="img" aria-label="Tastiera ${esc(show(name))}">`;
   for(let i=0;i<W;i++){const p=WH[i%7]+12*Math.floor(i/7);
-    g+=`<rect x="${1+i*kw}" y="1" width="${kw}" height="88" rx="2" fill="${keys.has(p)?'var(--accent)':'var(--panel)'}" stroke="currentColor" stroke-width="1"/>`}
+    g+=`<rect x="${1+i*kw}" y="1" width="${kw}" height="88" rx="2" fill="${keys.has(p)?'var(--accent)':'var(--surface)'}" stroke="currentColor" stroke-width="1"/>`}
   for(let o=0;o<2;o++)[1,3,6,8,10].forEach(b=>{const p=b+12*o;const wi=WH.findIndex(w=>w>b)+7*o;
     g+=`<rect x="${1+wi*kw-kw*.32}" y="1" width="${kw*.64}" height="54" rx="2" fill="${keys.has(p)?'var(--accent)':'currentColor'}" stroke="currentColor" stroke-width="1"/>`});
   return g+'</svg>';
 }
-function diagram(name){return P.piano?pianoSVG(name):guitarSVG(name)}
+function diagram(name,small){return P.piano?pianoSVG(name):guitarSVG(name,small)}
 
 /* ================= analysis =================
    1. framePeaks: spectral peaks of one frame (frequency in semitones + log weight)
@@ -750,7 +804,7 @@ function suggestCapo(song){
   const dur=src?src.duration():0;let tot=0;const segs=[];
   song.track.forEach((x,i)=>{if(x.c==='N')return;const d=Math.max(.1,(i+1<song.track.length?song.track[i+1].t:Math.max(dur,x.t+2))-x.t);segs.push({c:x.c,d});tot+=d});
   if(!tot)return null;
-  const score=capo=>segs.reduce((a,s)=>a+(EASY.has(shiftC(s.c,(song.transpose||0)-capo,P.simple).replace(/\/.*/,''))?s.d:0),0)/tot;
+  const score=capo=>segs.reduce((a,s)=>a+(EASY.has(shiftC(s.c,(song.transpose||0)-capo,'easy'))?s.d:0),0)/tot;
   let best=0,bs=-1;for(let c=0;c<=7;c++){const s=score(c)-c*.005;if(s>bs+1e-9){bs=s;best=c}}
   return{capo:best,easy:score(best),current:score(song.capo||0)};
 }
@@ -760,7 +814,8 @@ function suggestCapo(song){
 const KEY='chordcapo-v2';
 let S;try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!S||!Array.isArray(S.songs))S={libs:[{id:'l1',name:'Preferiti'},{id:'l2',name:'Da imparare'}],songs:[],filter:'all',apiKey:''};
-S.prefs=Object.assign({it:false,piano:false,lefty:false,simple:false,theme:'system'},S.prefs);
+S.prefs=Object.assign({it:false,piano:false,lefty:false,theme:'system',vo:{}},S.prefs);
+if(!S.prefs.chords)S.prefs.chords=S.prefs.simple?'basic':'easy';delete S.prefs.simple;
 S.sort=S.sort||'recent';
 const P=S.prefs;
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S,(k,v)=>k[0]==='_'?undefined:v))}catch(e){}}
@@ -776,7 +831,20 @@ function toast(msg,action,fn){$('toastMsg').textContent=msg;const b=$('toastAct'
 let song=null,src=null,fileUrl=null,loop={a:null,b:null,on:false},speed=1,view='library';
 const isSaved=s=>!!s&&S.songs.includes(s);
 function persist(){if(isSaved(song))save()}
-function refreshAll(){renderHead();buildStrip();buildGrid();renderLibrary();lastIdx=-2;lastBeat=null}
+function refreshAll(){
+  if(song){const k=detectKey(song.track,src?src.duration():0);setSpelling(k?{root:k.root+shiftN(),minor:k.minor}:null)}
+  renderHead();buildStrip();buildGrid();renderChordSet();renderLibrary();lastIdx=-2;lastBeat=null}
+/* the set of chords used in the song, with their guitar shapes */
+function renderChordSet(){
+  if(!song)return;const n=shiftN(),m=chordMode(),seen=[];
+  song.track.forEach(x=>{if(x.c==='N')return;const c=shiftC(x.c,n,m);if(!seen.includes(c))seen.push(c)});
+  $('chordSetBox').hidden=!seen.length;
+  $('chordSet').innerHTML=seen.map(c=>`<button type="button" class="cs" data-voice="${esc(c)}"><b>${esc(show(c))}</b>${diagram(c,true)}</button>`).join('');
+  document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
+  markChordSet($('diagram').dataset.voice);
+}
+function markChordSet(cur){$('chordSet').querySelectorAll('.cs').forEach(b=>b.classList.toggle('cur',b.dataset.voice===cur))}
+function onVoiceClick(name){if(!name||P.piano)return;cycleVoicing(name);renderChordSet();lastIdx=-2}
 
 /* ================= views ================= */
 function go(v){
@@ -1030,6 +1098,9 @@ $('rewBtn').onclick=()=>src&&src.seek(Math.max(0,src.time()-5));
 $('fwdBtn').onclick=()=>src&&src.seek(src.time()+5);
 function selectTab(t){$('tabGrid').hidden=t!=='grid';$('tabDetect').hidden=t!=='detect';
   $('tabGridBtn').setAttribute('aria-selected',String(t==='grid'));$('tabDetectBtn').setAttribute('aria-selected',String(t==='detect'))}
+$('chordSet').onclick=e=>{const b=e.target.closest('[data-voice]');if(b)onVoiceClick(b.dataset.voice)};
+$('diagram').onclick=()=>onVoiceClick($('diagram').dataset.voice);
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{P.chords=b.dataset.mode;save();renderPrefs();refreshAll()});
 $('tabGridBtn').onclick=()=>selectTab('grid');$('tabDetectBtn').onclick=()=>selectTab('detect');
 function renderMini(){const show2=!!song&&view!=='player';$('mini').hidden=!show2;if(show2)$('miniTitle').textContent=song.title}
 
@@ -1044,7 +1115,7 @@ function buildStrip(){
   if(!song)return;const tr=song.track;$('tlEmpty').hidden=tr.length>0;
   const dur=Math.max(src?src.duration():0,tr.length?tr[tr.length-1].t+4:0);const n=shiftN();
   let h=tr.map((x,i)=>{const end=i+1<tr.length?tr[i+1].t:Math.max(dur,x.t+4);
-    return `<div class="blk${x.c==='N'?' nc':''}" data-i="${i}" style="left:${x.t*PPS}px;width:${Math.max(4,(end-x.t)*PPS)}px">${esc(show(shiftC(x.c,n,P.simple)))}</div>`}).join('');
+    return `<div class="blk${x.c==='N'?' nc':''}" data-i="${i}" style="left:${x.t*PPS}px;width:${Math.max(4,(end-x.t)*PPS)}px">${esc(show(shiftC(x.c,n,chordMode())))}</div>`}).join('');
   if(loop.a!==null&&loop.b!==null)h=`<div class="loopband" style="left:${loop.a*PPS}px;width:${(loop.b-loop.a)*PPS}px"></div>`+h;
   $('strip').innerHTML=h;
 }
@@ -1072,7 +1143,7 @@ function buildGrid(){
       if(t<0||kk>k1){html+='<span class="beat"></span>';continue}
       const i=idxAt(t+.02);const c=i>=0?song.track[i].c:'N';const rep=c===prev;prev=c;
       const inl=loop.a!==null&&loop.b!==null&&t>=loop.a-1e-3&&t<loop.b;
-      html+=`<button type="button" class="beat${rep?' rep':''}${inl?' inloop':''}" data-k="${kk}" data-t="${t.toFixed(3)}">${rep?'·':esc(show(shiftC(c,n,P.simple)))}</button>`}
+      html+=`<button type="button" class="beat${rep?' rep':''}${inl?' inloop':''}" data-k="${kk}" data-t="${t.toFixed(3)}">${rep?'·':esc(show(shiftC(c,n,chordMode())))}</button>`}
     html+='</div>'}
   $('bars').innerHTML=html;lastBeat=null;
 }
@@ -1089,7 +1160,7 @@ $('copyBtn').onclick=async()=>{
   if(!song||!song.track.length)return;const n=shiftN();let txt=song.title+(song.capo?` (capo ${song.capo})`:'')+'\n\n';
   if(song.bpm){const cells=[...$('bars').querySelectorAll('.bar')].map(b=>[...b.children].map(x=>x.textContent||' ').join(' '));
     for(let i=0;i<cells.length;i+=4)txt+='| '+cells.slice(i,i+4).join(' | ')+' |\n'}
-  else txt+=song.track.filter(x=>x.c!=='N').map(x=>fmt(x.t)+'  '+show(shiftC(x.c,n,P.simple))).join('\n');
+  else txt+=song.track.filter(x=>x.c!=='N').map(x=>fmt(x.t)+'  '+show(shiftC(x.c,n,chordMode()))).join('\n');
   try{await navigator.clipboard.writeText(txt);toast('Accordi copiati')}catch(e){toast('Copia non riuscita')}};
 
 /* ================= render loop ================= */
@@ -1109,13 +1180,13 @@ function frame(){
     if(i!==lastIdx){
       const prev=$('strip').querySelector('.blk.cur');if(prev)prev.classList.remove('cur');
       const el=$('strip').querySelector(`[data-i="${i}"]`);if(el)el.classList.add('cur');
-      const n=shiftN();const c=i>=0?song.track[i].c:'N';const sc=shiftC(c,n,P.simple);
+      const n=shiftN();const c=i>=0?song.track[i].c:'N';const sc=shiftC(c,n,chordMode());
       $('nowChord').textContent=show(sc);$('miniChord').textContent=show(sc);
       $('realChord').hidden=!song.capo||c==='N';
-      if(song.capo&&c!=='N')$('realChord').innerHTML=`Forma con capo ${song.capo} · suona come <b>${esc(show(shiftC(c,song.transpose||0,P.simple)))}</b>`;
+      if(song.capo&&c!=='N')$('realChord').innerHTML=`Forma con capo ${song.capo} · suona come <b>${esc(show(shiftC(c,song.transpose||0,chordMode())))}</b>`;
       const nx=song.track.slice(i+1).find(x=>x.c!=='N');
-      $('nextChord').textContent=nx?show(shiftC(nx.c,n,P.simple)):'—';
-      $('diagram').innerHTML=c!=='N'?diagram(sc):'';
+      $('nextChord').textContent=nx?show(shiftC(nx.c,n,chordMode())):'—';
+      $('diagram').innerHTML=c!=='N'?diagram(sc):'';$('diagram').dataset.voice=c!=='N'?sc:'';markChordSet(sc);
       lastIdx=i}
     if(song.bpm){const k=Math.floor((t-(song.beat0||0))/(60/song.bpm)+1e-6);
       if(k!==lastBeat){const p=$('bars').querySelector('.beat.cur');if(p)p.classList.remove('cur');

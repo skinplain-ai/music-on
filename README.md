@@ -12,7 +12,14 @@ Accordi che scorrono insieme al brano, con capotasto, trasposizione, diagrammi p
 - **Capotasto consigliato**: l'app calcola il capo che ti fa suonare più accordi aperti, e con un file lo imposta da sola.
 - **Tonalità stimata** del brano e delle forme che suoni con il capo.
 - **Velocità** dal 50% al 150% senza cambiare l'intonazione, e **loop A–B** per ripetere i passaggi difficili.
-- **Diagrammi** per chitarra (anche per mancini) o pianoforte, notazione **Do Re Mi** oppure **C D E**, e opzione **accordi semplificati**.
+- **Accordi pensati per la chitarra**:
+  - **Facili per chitarra** (predefinito): niente accordi con il basso (G/B diventa G) né estensioni scomode (C9 diventa C7, Bbmaj7 diventa Bb). Restano quelli che hanno una forma comoda, come Cmaj7, Am7 e Dsus4.
+  - **Completi**: gli accordi così come vengono rilevati.
+  - **Base**: solo maggiori e minori.
+- **Diagrammi con diteggiatura**: numero delle dita, barré disegnato e tasto di partenza. Per ogni accordo ci sono le posizioni aperte e quelle barré (radice sulla 6ª, 5ª o 4ª corda, per esempio Eb = xx1343), dalla più facile in su. Tocca il diagramma per cambiare posizione: la scelta viene ricordata.
+- **Accordi del brano**: tutti gli accordi della canzone con il loro diagramma, prima di iniziare a suonare.
+- **Diesis e bemolle secondo la tonalità**: Bb ed Eb nei brani in Fa, F# e C# in Mi e La.
+- Diagrammi anche per **pianoforte** e per **mancini**, e notazione **Do Re Mi** oppure **C D E**.
 - **Accordatore** per chitarra con il microfono.
 - **Schermo intero** con accordi giganti, da usare sul leggio.
 - **Librerie** con filtro, **esportazione e importazione** (backup o passaggio a un altro dispositivo) e **Copia accordi** per condividerli.
