@@ -1,0 +1,14 @@
+{
+  "name": "ChordCapo",
+  "short_name": "ChordCapo",
+  "description": "Accordi che scorrono con il brano, da YouTube o da un file audio, con capotasto, griglia, loop e accordatore.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0C0F14",
+  "theme_color": "#2747D8",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

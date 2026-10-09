@@ -4,122 +4,193 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ChordCapo</title>
+<meta name="description" content="Accordi che scorrono con il brano, da YouTube o da un file audio, con capotasto, griglia, loop e accordatore.">
+<meta name="theme-color" content="#F3F4F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C0F14" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-/* Layout: library rail on the left; player + timeline, current chord, beat grid and tools on the right. Stacks on phones. */
+/* Layout: app shell. Top bar with search + views (Libreria · Suona · Accordatore · Impostazioni);
+   on phones the view switcher becomes a bottom tab bar. The player keeps a sticky control bar,
+   and a mini-player follows you outside it. */
 :root{
-  --bg:#EEF1F4; --panel:#FFFFFF; --ink:#141B24; --muted:#5B6878; --line:#D5DCE4;
-  --accent:#2F5DDB; --accent-ink:#FFFFFF; --accent-soft:#E2E9FB;
-  --now:#F2B33D; --now-ink:#1D1404; --danger:#B4232A; --rec:#D63B3B; --ok:#1F8A4C; --loop:rgba(47,93,219,.14);
+  --bg:#F3F4F7; --surface:#FFFFFF; --surface-2:#ECEEF2; --ink:#11151B; --muted:#5E6876; --line:#DDE1E7;
+  --accent:#2747D8; --accent-ink:#FFFFFF; --accent-soft:#E3E8FC;
+  --now:#F5A524; --now-ink:#1C1202; --danger:#C0262D; --rec:#D93A3A; --ok:#178A4A; --loop:rgba(39,71,216,.13);
+  --shadow:0 1px 2px rgba(17,21,27,.06),0 8px 24px rgba(17,21,27,.06);
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --r:14px; --nav-h:0px;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0F141B; --panel:#18202A; --ink:#E8EDF3; --muted:#93A1B2; --line:#2A3542;
-  --accent:#7F9FF5; --accent-ink:#0B1224; --accent-soft:#1E2A47;
-  --danger:#F07178; --rec:#FF6B6B; --ok:#5BD08C; --loop:rgba(127,159,245,.18); color-scheme:dark}}
+  --bg:#0C0F14; --surface:#151A21; --surface-2:#1C232C; --ink:#E8ECF1; --muted:#909BAA; --line:#27303B;
+  --accent:#8FA3FF; --accent-ink:#0A1030; --accent-soft:#1D2547;
+  --now:#FBB938; --danger:#FF7A80; --rec:#FF6B6B; --ok:#4FD18B; --loop:rgba(143,163,255,.16);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.25); color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0F141B; --panel:#18202A; --ink:#E8EDF3; --muted:#93A1B2; --line:#2A3542;
-  --accent:#7F9FF5; --accent-ink:#0B1224; --accent-soft:#1E2A47;
-  --danger:#F07178; --rec:#FF6B6B; --ok:#5BD08C; --loop:rgba(127,159,245,.18); color-scheme:dark}
+  --bg:#0C0F14; --surface:#151A21; --surface-2:#1C232C; --ink:#E8ECF1; --muted:#909BAA; --line:#27303B;
+  --accent:#8FA3FF; --accent-ink:#0A1030; --accent-soft:#1D2547;
+  --now:#FBB938; --danger:#FF7A80; --rec:#FF6B6B; --ok:#4FD18B; --loop:rgba(143,163,255,.16);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.25); color-scheme:dark}
 
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 img{max-width:100%}
-.wrap{max-width:1260px;margin:0 auto;padding-inline:16px;padding-block:16px 40px}
-header.top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-.brand{font-family:var(--display);font-weight:700;font-size:30px;line-height:1}
-.brand b{color:var(--accent)}
-.tag{color:var(--muted);font-size:13px}
-.app{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;align-items:start}
-@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}.app main{order:-1}}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
-.rail,main{display:flex;flex-direction:column;gap:16px;min-width:0}
-h2,h3{margin:0;font-family:var(--display);font-weight:600;letter-spacing:.02em;text-wrap:balance}
-.label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
-.stack{display:flex;flex-direction:column;gap:8px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.between{justify-content:space-between}
-input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;min-width:0}
-input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible,.bar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-button,.btn{font:inherit;font-weight:600;font-size:14px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:8px 12px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;line-height:1.2}
-button:hover,.btn:hover{border-color:var(--accent)}
-button:disabled{opacity:.5;cursor:default}
-button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
-.sm{padding:5px 9px;font-size:13px}
-.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.ghost{background:transparent}
-.danger{color:var(--danger)}
-.grow{flex:1}
+svg.i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.i.fill{fill:currentColor;stroke:none}
+h1,h2,h3{margin:0;font-family:var(--display);font-weight:600;letter-spacing:.01em;text-wrap:balance;line-height:1.1}
+h2{font-size:26px}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}
 .hint{font-size:13px;color:var(--muted);margin:0}
 .err{font-size:13px;color:var(--danger);margin:0}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{border-radius:999px;padding:5px 11px;font-size:13px}
-.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.list li>button{width:100%;justify-content:space-between;border:0;border-radius:6px;padding:8px;text-align:left;background:transparent;font-weight:500}
-.list li>button[aria-current="true"]{background:var(--accent-soft)}
-.list .t{display:block;font-weight:600;overflow-wrap:anywhere}
-.list .a{display:block;font-size:12px;color:var(--muted)}
-.result{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:center;padding:6px;border-radius:6px;border:0;background:transparent;text-align:left;width:100%;font-weight:500}
-.result img{border-radius:4px;aspect-ratio:16/9;object-fit:cover;width:96px}
-.result:hover{background:var(--accent-soft)}
-.empty{color:var(--muted);font-size:14px;padding:6px 0;margin:0}
-details>summary{cursor:pointer;font-family:var(--display);font-size:19px;font-weight:600;letter-spacing:.02em}
-details[open]>summary{margin-bottom:10px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
-.seg button{border:0;border-radius:0;padding:6px 10px;font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.between{justify-content:space-between}
+.stack{display:flex;flex-direction:column;gap:10px}
+code,kbd{font-family:var(--mono);font-size:12.5px}
+kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--surface)}
 
-.media{aspect-ratio:16/9;width:100%;max-width:100%;background:#000;border-radius:8px;overflow:hidden}
+input,select{font:inherit;color:var(--ink);background:var(--surface-2);border:1px solid transparent;border-radius:10px;padding:9px 12px;min-width:0}
+input:focus,select:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button,.btn{font:inherit;font-weight:600;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:8px 13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;line-height:1.2;transition:border-color .15s,background .15s}
+button:hover,.btn:hover{border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.primary:hover{filter:brightness(1.08)}
+.ghost{background:transparent;border-color:transparent}
+.ghost:hover{background:var(--surface-2);border-color:transparent}
+.danger{color:var(--danger)}
+.sm{padding:6px 10px;font-size:13px;border-radius:8px}
+.icon-btn{width:40px;height:40px;padding:0;border-radius:999px}
+button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+
+/* ---------- app bar & navigation ---------- */
+.appbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+.appbar-in{max-width:1280px;margin:0 auto;padding-inline:16px;padding-block:10px;display:flex;align-items:center;gap:14px}
+.brand{font-family:var(--display);font-weight:700;font-size:26px;border:0;background:none;padding:0;color:var(--ink);letter-spacing:.01em}
+.brand b{color:var(--accent)}
+.searchbox{flex:1;max-width:560px;position:relative;display:flex;align-items:center}
+.searchbox svg{position:absolute;left:12px;color:var(--muted);pointer-events:none}
+.searchbox input{width:100%;padding-left:40px;border-radius:999px}
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tab{border:0;background:transparent;color:var(--muted);border-radius:999px;padding:8px 14px;font-weight:600}
+.tab:hover{background:var(--surface-2);color:var(--ink)}
+.tab[aria-current="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.tab .dot{width:7px;height:7px;border-radius:50%;background:var(--rec);display:none}
+.tab.live .dot{display:block}
+@media (max-width:860px){
+  :root{--nav-h:62px}
+  /* a backdrop-filter would make the fixed tab bar position itself inside the header */
+  .appbar{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--bg)}
+  .appbar-in{gap:10px}
+  .brand{font-size:22px}
+  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;margin:0;justify-content:space-around;gap:0;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+  .tab{flex-direction:column;gap:2px;font-size:11px;padding:4px 6px;flex:1;border-radius:10px}
+  .tab[aria-current="true"]{box-shadow:none;background:transparent;color:var(--accent)}
+  .tab .dot{position:absolute;margin-left:18px;margin-top:-2px}
+}
+@media (min-width:861px){.tab svg{display:none}}
+
+.wrap{max-width:1280px;margin:0 auto;padding-inline:16px;padding-block:20px calc(40px + var(--nav-h) + env(safe-area-inset-bottom,0px))}
+.view{display:flex;flex-direction:column;gap:20px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+
+/* ---------- library ---------- */
+.quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:560px){.quick{grid-template-columns:minmax(0,1fr)}}
+.tile{display:flex;align-items:center;gap:14px;text-align:left;justify-content:flex-start;padding:16px;border-radius:var(--r);background:var(--surface);border:1px solid var(--line);cursor:pointer;font-weight:500}
+.tile .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);flex:none}
+.tile b{display:block;font-size:15px}
+.tile span{color:var(--muted);font-size:13px}
+.results{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.result{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:8px;text-align:left;border-radius:12px;font-weight:500;height:100%;justify-content:flex-start}
+.result img{border-radius:8px;aspect-ratio:16/9;object-fit:cover;width:100%}
+.result .t{font-weight:600;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.result .a{font-size:12px;color:var(--muted)}
+.libhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{border-radius:999px;padding:6px 13px;font-size:13px;white-space:nowrap;flex:none}
+.chip .n{color:var(--muted);font-weight:500;margin-left:2px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tools input{flex:1;min-width:160px}
+.songs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+@media (max-width:560px){.songs{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+.song{position:relative;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0;transition:transform .15s,box-shadow .15s}
+.song:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+.song.current{outline:2px solid var(--accent);outline-offset:-1px}
+.song-open{all:unset;cursor:pointer;display:flex;flex-direction:column;min-width:0}
+.song-open:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.thumb{position:relative;aspect-ratio:16/9;background:var(--surface-2);display:grid;place-items:center;color:var(--muted);overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .big{font-family:var(--display);font-size:38px;font-weight:700;color:var(--accent);opacity:.9}
+.badges{position:absolute;left:8px;bottom:8px;display:flex;gap:4px;flex-wrap:wrap}
+.badge{font-size:11px;font-weight:700;background:rgba(10,12,16,.72);color:#fff;border-radius:6px;padding:2px 6px}
+.song-text{padding:10px 12px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.song-text .t{font-weight:600;line-height:1.3;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.song-text .a{font-size:12px;color:var(--muted)}
+.song .more{position:absolute;top:6px;right:6px;width:32px;height:32px;padding:0;border-radius:999px;background:rgba(10,12,16,.55);color:#fff;border:0}
+.empty-state{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:36px 16px;border:1px dashed var(--line);border-radius:var(--r);color:var(--muted)}
+.empty-state h3{color:var(--ink);font-size:22px}
+.empty-state ol{text-align:left;margin:0;padding-left:20px;max-width:52ch;display:flex;flex-direction:column;gap:4px}
+
+/* ---------- player ---------- */
+.playerhead{display:flex;align-items:center;gap:12px;min-width:0}
+.ph-title{flex:1;min-width:0}
+.ph-title h1{font-size:28px;overflow-wrap:anywhere}
+.playergrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:stretch}
+@media (max-width:960px){.playergrid{grid-template-columns:minmax(0,1fr)}}
+.media{aspect-ratio:16/9;width:100%;max-width:100%;background:#000;border-radius:var(--r);overflow:hidden}
 .media iframe,.media>div{width:100%;height:100%;display:block;border:0}
-.welcome{display:flex;flex-direction:column;gap:10px;padding-block:8px}
-.welcome h2{font-size:30px}
-.welcome ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.filecard{display:flex;flex-direction:column;gap:12px;justify-content:center;min-height:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.filecard .big{font-family:var(--display);font-size:22px;font-weight:600;overflow-wrap:anywhere}
 audio{width:100%}
+.nowcard{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.nowtop{display:flex;justify-content:space-between;align-items:center}
+.clock{font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.nowmain{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:12px;align-items:center;flex:1}
+@media (max-width:520px){.nowmain{grid-template-columns:minmax(0,1fr) 112px}}
+.nowchord{font-family:var(--display);font-weight:700;font-size:clamp(68px,10vw,118px);line-height:.9;overflow-wrap:anywhere;letter-spacing:-.01em}
+.realchord{font-size:13px;color:var(--muted);margin-top:4px}
+.realchord b{color:var(--ink)}
+.nextchord{color:var(--muted);font-size:14px;margin-top:8px}
+.nextchord b{font-family:var(--display);font-size:24px;color:var(--ink);font-weight:600;margin-left:4px}
+.simpl{font-size:12px;color:var(--muted);margin:0;text-align:center}
+svg.diag{width:100%;height:auto;color:var(--ink)}
+.nowfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+#stagePanel:fullscreen{background:var(--surface);padding:5vw;justify-content:center;border-radius:0}
+#stagePanel:fullscreen .nowchord{font-size:24vw}
+#stagePanel:fullscreen .nowmain{grid-template-columns:minmax(0,1fr) 28vw}
 
-.songhead{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end}
-.songhead h2{font-size:28px;line-height:1.1;overflow-wrap:anywhere}
-
-.timeline{position:relative;height:74px;overflow:hidden;border-radius:8px;background:var(--bg);border:1px solid var(--line);cursor:pointer;margin-top:12px}
+.timeline{position:relative;height:78px;overflow:hidden;border-radius:var(--r);background:var(--surface);border:1px solid var(--line);cursor:pointer}
 .strip{position:absolute;top:0;bottom:0;left:0;will-change:transform}
-.blk{position:absolute;top:10px;bottom:10px;border-left:2px solid var(--line);padding:4px 8px;font-family:var(--display);font-size:24px;font-weight:600;white-space:nowrap;overflow:hidden;color:var(--ink)}
+.blk{position:absolute;top:12px;bottom:12px;border-left:2px solid var(--line);padding:4px 10px;font-family:var(--display);font-size:26px;font-weight:600;white-space:nowrap;overflow:hidden;color:var(--ink)}
 .blk.nc{color:var(--muted)}
-.blk.cur{background:var(--now);color:var(--now-ink);border-radius:4px;border-left-color:var(--now)}
+.blk.cur{background:var(--now);color:var(--now-ink);border-radius:8px;border-left-color:transparent}
 .loopband{position:absolute;top:0;bottom:0;background:var(--loop);border-inline:2px solid var(--accent)}
-.playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);left:30%;pointer-events:none}
+.playhead{position:absolute;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--accent);left:30%;pointer-events:none}
 .tlempty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;padding:8px;text-align:center}
 
-.controls{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-end;margin-top:14px}
-.ctl{display:flex;flex-direction:column;gap:4px}
-.stepper{display:flex;align-items:center;gap:4px}
-.stepper output{min-width:42px;text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums}
-.stepper button{width:34px;justify-content:center;padding:6px 0}
-.suggest{font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);border-radius:8px;padding:6px 10px;margin-top:12px}
-.sounds{font-size:13px;color:var(--muted);margin-top:10px}
-.sounds b{color:var(--ink)}
+.suggest{font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--accent-soft);border-radius:12px;padding:10px 14px}
+.suggest .grow{flex:1;min-width:200px}
 
-.stage{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:16px;align-items:center}
-@media (max-width:520px){.stage{grid-template-columns:minmax(0,1fr) 120px}}
-.nowchord{font-family:var(--display);font-weight:700;font-size:clamp(64px,12vw,120px);line-height:.9;overflow-wrap:anywhere}
-.nextchord{color:var(--muted);font-size:14px;margin-top:6px}
-.nextchord b{font-family:var(--display);font-size:22px;color:var(--ink);font-weight:600}
-.clock{font-family:var(--mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
-.simpl{font-size:12px;color:var(--muted);margin:0}
-svg.diag{width:100%;height:auto;color:var(--ink)}
-#stagePanel:fullscreen{background:var(--panel);display:flex;flex-direction:column;justify-content:center;padding:6vw}
-#stagePanel:fullscreen .nowchord{font-size:22vw}
-#stagePanel:fullscreen .stage{grid-template-columns:minmax(0,1fr) 28vw}
+.segtabs{display:inline-flex;background:var(--surface-2);border-radius:999px;padding:3px;gap:2px;align-self:flex-start}
+.segtabs button{border:0;border-radius:999px;background:transparent;padding:7px 16px;color:var(--muted)}
+.segtabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 
-.gridwrap{max-height:340px;overflow-y:auto;margin-top:10px;position:relative}
-.bars{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-left:2px solid var(--ink)}
+.gridwrap{max-height:360px;overflow-y:auto;position:relative;border-radius:10px}
+.bars{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 @media (max-width:620px){.bars{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-right:2px solid var(--ink);border-bottom:1px solid var(--line);min-height:48px}
-.beat{border:0;border-radius:0;background:transparent;padding:6px 2px;justify-content:center;font-family:var(--display);font-size:20px;font-weight:600;color:var(--ink);min-width:0;overflow:hidden;white-space:nowrap}
+.bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:var(--surface-2);border-radius:10px;overflow:hidden;min-height:50px}
+.beat{border:0;border-radius:0;background:transparent;padding:6px 2px;font-family:var(--display);font-size:21px;font-weight:600;color:var(--ink);min-width:0;overflow:hidden;white-space:nowrap}
 .beat.rep{color:var(--muted)}
 .beat.cur{background:var(--now);color:var(--now-ink)}
 .beat.inloop{box-shadow:inset 0 -3px 0 var(--accent)}
@@ -127,187 +198,228 @@ svg.diag{width:100%;height:auto;color:var(--ink)}
 
 .rec{color:var(--rec);border-color:var(--rec)}
 .rec.on{background:var(--rec);color:#fff}
-.meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden;width:120px}
+.meter{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;width:120px}
 .meter i{display:block;height:100%;width:0;background:var(--accent)}
-.progress{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.progress{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
 .progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
-.notice{background:var(--accent-soft);border-radius:8px;padding:10px 12px;font-size:13px;margin:0}
-code{font-family:var(--mono);font-size:12.5px}
-.editrow input{width:96px}
-hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
+.notice{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:13px;margin:0;color:var(--muted)}
+.editrow input{width:110px}
+.subhead{font-family:var(--display);font-size:18px;font-weight:600}
 
-.tuner{display:flex;flex-direction:column;align-items:center;gap:6px;padding-block:6px}
-.tnote{font-family:var(--display);font-size:56px;font-weight:700;line-height:1}
-.tscale{position:relative;width:100%;height:28px;border-radius:6px;background:var(--bg);border:1px solid var(--line)}
-.tscale::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--ok)}
-.tneedle{position:absolute;top:3px;bottom:3px;width:6px;border-radius:3px;background:var(--danger);left:50%;transform:translateX(-50%)}
+/* sticky control bar */
+.controlbar{position:sticky;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 10px);z-index:15;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:18px;padding:8px 10px;box-shadow:var(--shadow)}
+.playbtn{width:48px;height:48px;border-radius:999px;padding:0;background:var(--accent);color:var(--accent-ink);border:0}
+.controlbar .clock{min-width:84px}
+.ctl-chips{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.ctl-chip{border-radius:999px;padding:6px 12px;font-size:13px;gap:5px}
+.ctl-chip small{color:var(--muted);font-weight:500}
+.ctl-chip.on{background:var(--accent-soft);border-color:var(--accent)}
+@media (max-width:620px){.controlbar{gap:6px}.controlbar .clock{min-width:0;font-size:12px}.ctl-chips{margin-left:0;width:100%;justify-content:space-between}.ctl-chip{flex:1;padding:6px 6px}}
+
+/* mini player */
+.mini{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 10px);z-index:25;width:min(560px,calc(100% - 24px));display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:8px;box-shadow:var(--shadow)}
+.mini .mt{flex:1;min-width:0;cursor:pointer}
+.mini .mt b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.mini .mt span{font-size:12px;color:var(--muted)}
+.mini .mc{font-family:var(--display);font-size:28px;font-weight:700;min-width:56px;text-align:center;background:var(--now);color:var(--now-ink);border-radius:10px;padding:0 8px}
+.mini .playbtn{width:40px;height:40px}
+
+/* tuner */
+.tuner{display:flex;flex-direction:column;align-items:center;gap:14px;padding-block:20px;max-width:520px;margin:0 auto;width:100%}
+.tnote{font-family:var(--display);font-size:120px;font-weight:700;line-height:.9}
+.tscale{position:relative;width:100%;height:40px;border-radius:12px;background:var(--surface-2)}
+.tscale::after{content:"";position:absolute;left:50%;top:6px;bottom:6px;width:2px;background:var(--ok)}
+.tticks{display:flex;justify-content:space-between;width:100%;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.tneedle{position:absolute;top:5px;bottom:5px;width:8px;border-radius:4px;background:var(--danger);left:50%;transform:translateX(-50%);transition:left .08s linear}
 .tneedle.ok{background:var(--ok)}
-.tinfo{font-family:var(--mono);font-size:13px;color:var(--muted)}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:14px;z-index:9;max-width:calc(100% - 32px)}
-@media (prefers-reduced-motion:reduce){.progress i{transition:none}}
+.tinfo{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:center}
+.strings{display:flex;gap:8px}
+.strings span{width:44px;height:44px;border-radius:999px;display:grid;place-items:center;background:var(--surface-2);font-family:var(--display);font-size:20px;font-weight:600}
+.strings span.hit{background:var(--accent);color:var(--accent-ink)}
+
+/* settings */
+.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+.setrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.setrow:last-child{border-bottom:0}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;border-radius:8px;padding:6px 11px;font-size:13px;background:transparent;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+/* sheet (dialog) */
+dialog.sheet{border:0;padding:0;background:var(--surface);color:var(--ink);border-radius:20px;width:min(440px,calc(100% - 24px));max-height:min(80vh,640px);box-shadow:var(--shadow)}
+dialog.sheet::backdrop{background:rgba(5,8,12,.45)}
+@media (max-width:620px){dialog.sheet{width:100%;max-width:100%;margin:auto 0 0;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}}
+.sheet-h{display:flex;justify-content:space-between;align-items:center;padding:16px 16px 8px}
+.sheet-h h3{font-size:22px}
+.sheet-b{padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.optgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.optgrid button{padding:10px 0}
+.optlist{display:flex;flex-direction:column;gap:6px}
+.optlist button{justify-content:space-between;padding:12px 14px}
+.bigstep{display:flex;align-items:center;justify-content:center;gap:16px}
+.bigstep output{font-family:var(--display);font-size:44px;font-weight:700;min-width:80px;text-align:center}
+.bigstep button{width:52px;height:52px;border-radius:999px;font-size:22px;padding:0}
+
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 84px);transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 12px 10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:calc(100% - 32px);display:flex;align-items:center;gap:12px;box-shadow:var(--shadow)}
+.toast button{background:transparent;color:var(--bg);border-color:color-mix(in srgb,var(--bg) 40%,transparent);padding:5px 10px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <div class="brand">Chord<b>Capo</b></div>
-    <div class="tag">Accordi che scorrono con il brano · capotasto, velocità, loop e accordatore inclusi</div>
-  </header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><path d="M4 4v16M9 4v16M14 5l5 15"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+  <symbol id="i-tuner" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10.4-6.5a1 1 0 0 0 0-1.8L9.5 4.6A1 1 0 0 0 8 5.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-rew" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-full" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></symbol>
+</svg>
 
-  <div class="app">
-    <aside class="rail">
-      <section class="panel stack" aria-labelledby="h-search">
-        <h3 id="h-search">Cerca su YouTube</h3>
-        <form class="row" id="searchForm">
-          <input id="q" class="grow" type="search" placeholder="Titolo o artista" autocomplete="off">
-          <button class="primary" type="submit">Cerca</button>
-        </form>
-        <p class="err" id="searchErr" hidden></p>
-        <ul class="list" id="results"></ul>
-        <form class="row" id="linkForm">
-          <input id="link" class="grow" placeholder="…oppure incolla un link YouTube" inputmode="url">
-          <button type="submit">Apri</button>
-        </form>
-        <label class="btn" for="fileIn" style="justify-content:center">Apri un file audio dal dispositivo</label>
-        <input id="fileIn" type="file" accept="audio/*" hidden>
-      </section>
+<header class="appbar">
+  <div class="appbar-in">
+    <button class="brand" type="button" data-go="library" aria-label="ChordCapo, vai alla libreria">Chord<b>Capo</b></button>
+    <form class="searchbox" id="searchForm" role="search">
+      <svg class="i"><use href="#i-search"/></svg>
+      <input id="q" type="search" placeholder="Cerca un brano o incolla un link YouTube" autocomplete="off" aria-label="Cerca un brano o incolla un link YouTube">
+    </form>
+    <nav class="tabs" aria-label="Sezioni">
+      <button class="tab" type="button" data-go="library"><svg class="i"><use href="#i-lib"/></svg>Libreria</button>
+      <button class="tab" type="button" data-go="player" id="tabPlayer"><svg class="i"><use href="#i-note"/></svg>Suona<span class="dot" aria-hidden="true"></span></button>
+      <button class="tab" type="button" data-go="tuner"><svg class="i"><use href="#i-tuner"/></svg>Accordatore</button>
+      <button class="tab" type="button" data-go="settings"><svg class="i"><use href="#i-gear"/></svg>Impostazioni</button>
+    </nav>
+  </div>
+</header>
 
-      <section class="panel stack" aria-labelledby="h-lib">
-        <div class="row between">
-          <h3 id="h-lib">Librerie</h3>
-          <button class="ghost sm" id="addLibBtn" type="button">+ Libreria</button>
-        </div>
-        <form class="row" id="addLibForm" hidden>
-          <input id="libName" class="grow" placeholder="Nome libreria">
-          <button class="primary" type="submit">Crea</button>
-        </form>
-        <div class="chips" id="libChips"></div>
-        <input id="libFilter" type="search" placeholder="Filtra brani" autocomplete="off">
-        <ul class="list" id="songList"></ul>
-        <hr>
+<main class="wrap">
+  <!-- ============ LIBRARY ============ -->
+  <section class="view" data-view="library">
+    <div class="quick">
+      <label class="tile" for="fileIn"><span class="ic"><svg class="i"><use href="#i-file"/></svg></span><span><b>Apri un file audio</b><span>Accordi, tempo e battute rilevati in automatico</span></span></label>
+      <button class="tile" type="button" id="pasteTile"><span class="ic"><svg class="i"><use href="#i-link"/></svg></span><span><b>Brano da YouTube</b><span>Cerca o incolla il link nella barra in alto</span></span></button>
+    </div>
+    <input id="fileIn" type="file" accept="audio/*" hidden>
+
+    <section class="stack" id="searchArea" hidden>
+      <div class="row between"><h2 id="resTitle">Risultati</h2><button type="button" class="ghost sm" id="clearResults"><svg class="i"><use href="#i-x"/></svg>Chiudi</button></div>
+      <p class="err" id="searchErr" hidden></p>
+      <ul class="results" id="results"></ul>
+    </section>
+
+    <section class="stack">
+      <div class="libhead">
+        <h2>La tua libreria</h2>
         <div class="row">
-          <button type="button" class="sm" id="exportBtn">Esporta libreria</button>
-          <label class="btn sm" for="importIn">Importa</label>
-          <input id="importIn" type="file" accept="application/json,.json" hidden>
+          <select id="sortSel" aria-label="Ordina"><option value="recent">Aperti di recente</option><option value="az">Titolo A–Z</option><option value="added">Aggiunti di recente</option></select>
+          <button type="button" class="sm" id="addLibBtn">+ Nuova libreria</button>
         </div>
-        <p class="hint">L'esportazione crea un file con tutti i brani e gli accordi, da usare come backup o su un altro dispositivo.</p>
-      </section>
+      </div>
+      <form class="row" id="addLibForm" hidden>
+        <input id="libName" placeholder="Nome della libreria, es. Falò" style="flex:1">
+        <button class="primary sm" type="submit">Crea</button>
+        <button class="ghost sm" type="button" id="addLibCancel">Annulla</button>
+      </form>
+      <div class="tools">
+        <div class="chips" id="libChips" style="flex:1 1 auto;min-width:0"></div>
+        <input id="libFilter" type="search" placeholder="Filtra per titolo" autocomplete="off" aria-label="Filtra per titolo">
+      </div>
+      <div class="songs" id="songList"></div>
+      <div class="empty-state" id="libEmpty" hidden>
+        <h3>La libreria è vuota</h3>
+        <ol>
+          <li>Cerca un brano o incolla un link YouTube nella barra in alto, oppure apri un file audio.</li>
+          <li>Nel brano premi <b>Salva</b> e scegli una libreria.</li>
+          <li>Ritrovi qui il brano con accordi, capotasto e tempo, pronto da suonare.</li>
+        </ol>
+      </div>
+    </section>
+  </section>
 
-      <details class="panel" id="tunerBox">
-        <summary>Accordatore</summary>
-        <div class="tuner">
-          <div class="tnote" id="tNote">—</div>
-          <div class="tscale" aria-hidden="true"><div class="tneedle" id="tNeedle"></div></div>
-          <div class="tinfo" id="tInfo">Premi Avvia e suona una corda</div>
-          <button type="button" class="primary" id="tunerBtn">Avvia accordatore</button>
+  <!-- ============ PLAYER ============ -->
+  <section class="view" data-view="player" hidden>
+    <div class="empty-state" id="noSong">
+      <h3>Nessun brano aperto</h3>
+      <p class="hint">Scegli un brano dalla libreria, cerca su YouTube o apri un file audio.</p>
+      <button type="button" class="primary" data-go="library">Vai alla libreria</button>
+    </div>
+    <div class="view" id="songUi" hidden>
+      <div class="playerhead">
+        <button type="button" class="icon-btn ghost" data-go="library" aria-label="Torna alla libreria"><svg class="i"><use href="#i-back"/></svg></button>
+        <div class="ph-title"><div class="label" id="songKind"></div><h1 id="songTitle"></h1></div>
+        <button type="button" id="saveBtn"><svg class="i"><use href="#i-bookmark"/></svg><span id="saveLabel">Salva</span></button>
+      </div>
+
+      <div class="playergrid">
+        <div>
+          <div class="media" id="mediaBox" hidden><div id="ytBox"></div></div>
+          <div class="filecard" id="fileCard" hidden>
+            <div class="label">File audio</div>
+            <div class="big" id="fileName"></div>
+            <audio id="audioEl" controls></audio>
+            <p class="hint" id="fileMissing" hidden>Per riascoltare il brano, riapri lo stesso file con “Apri un file audio”: gli accordi sono già salvati.</p>
+          </div>
         </div>
-      </details>
-
-      <details class="panel">
-        <summary>Impostazioni</summary>
-        <div class="stack">
-          <div class="row between"><span>Notazione</span>
-            <div class="seg" role="group" aria-label="Notazione"><button type="button" data-pref="it" data-val="0">C D E</button><button type="button" data-pref="it" data-val="1">Do Re Mi</button></div></div>
-          <div class="row between"><span>Diagrammi</span>
-            <div class="seg" role="group" aria-label="Strumento"><button type="button" data-pref="piano" data-val="0">Chitarra</button><button type="button" data-pref="piano" data-val="1">Pianoforte</button></div></div>
-          <div class="row between"><span>Chitarra per mancini</span>
-            <div class="seg" role="group" aria-label="Mancini"><button type="button" data-pref="lefty" data-val="0">No</button><button type="button" data-pref="lefty" data-val="1">Sì</button></div></div>
-          <div class="row between"><span>Accordi semplificati</span>
-            <div class="seg" role="group" aria-label="Accordi semplificati"><button type="button" data-pref="simple" data-val="0">No</button><button type="button" data-pref="simple" data-val="1">Sì</button></div></div>
-          <hr>
-          <label class="label" for="apiKey">Chiave API YouTube (facoltativa)</label>
-          <input id="apiKey" placeholder="Per vedere i risultati dentro l'app" autocomplete="off">
-          <p class="hint">Senza chiave, la ricerca apre YouTube in una nuova scheda. Con una chiave gratuita di YouTube Data API v3 i risultati compaiono qui.</p>
-          <p class="hint">Scorciatoie: <code>Spazio</code> play/pausa, <code>←</code> <code>→</code> 5 secondi, <code>A</code>/<code>B</code> punti del loop, <code>L</code> loop sì/no.</p>
-        </div>
-      </details>
-    </aside>
-
-    <main>
-      <section class="panel">
-        <div class="media" id="mediaBox" hidden><div id="ytBox"></div></div>
-        <audio id="audioEl" controls hidden></audio>
-        <div class="welcome" id="welcome">
-          <h2>Scegli un brano</h2>
-          <ol>
-            <li>Cerca un brano o incolla un link YouTube, oppure apri un file audio tuo.</li>
-            <li>Con un file, gli accordi e il tempo vengono rilevati subito. Con YouTube premi <b>Rileva ascoltando</b> e fai partire il video: l'app ascolta dal microfono.</li>
-            <li>Gli accordi scorrono insieme al brano. Imposta il capotasto (o usa quello consigliato), rallenta, metti in loop i passaggi difficili e salva in libreria.</li>
-          </ol>
-        </div>
-
-        <div id="songUi" hidden>
-          <div class="songhead" style="margin-top:14px">
+        <div class="nowcard" id="stagePanel">
+          <div class="nowtop"><span class="label">Ora</span><span class="clock" id="clock">0:00</span></div>
+          <div class="nowmain">
             <div style="min-width:0">
-              <div class="label" id="songKind"></div>
-              <h2 id="songTitle"></h2>
+              <div class="nowchord" id="nowChord">—</div>
+              <div class="realchord" id="realChord" hidden></div>
+              <div class="nextchord">Poi<b id="nextChord">—</b></div>
             </div>
-            <div class="row">
-              <select id="saveLib" aria-label="Libreria"></select>
-              <button type="button" class="primary" id="saveBtn">Salva in libreria</button>
-            </div>
+            <div id="diagram"></div>
           </div>
-
-          <div class="timeline" id="timeline" title="Tocca per saltare a quel punto">
-            <div class="strip" id="strip"></div>
-            <div class="playhead"></div>
-            <div class="tlempty" id="tlEmpty">Ancora nessun accordo. Premi “Rileva ascoltando” e avvia il video.</div>
+          <div class="nowfoot">
+            <span class="hint" id="keyInfo"></span>
+            <button type="button" class="ghost sm" id="fsBtn"><svg class="i"><use href="#i-full"/></svg><span>Schermo intero</span></button>
           </div>
-
-          <div class="controls">
-            <div class="ctl"><label class="label" for="capo">Capotasto</label>
-              <select id="capo"></select></div>
-            <div class="ctl"><span class="label">Trasponi</span>
-              <div class="stepper"><button type="button" id="tDown" aria-label="Abbassa di un semitono">−</button><output id="tVal">0</output><button type="button" id="tUp" aria-label="Alza di un semitono">+</button></div></div>
-            <div class="ctl"><label class="label" for="speed">Velocità</label>
-              <select id="speed"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select></div>
-            <div class="ctl"><span class="label">Loop</span>
-              <div class="row" style="gap:4px"><button type="button" class="sm" id="loopA" title="Inizio loop (tasto A)">A</button><button type="button" class="sm" id="loopB" title="Fine loop (tasto B)">B</button><button type="button" class="sm" id="loopToggle" aria-pressed="false">Ripeti</button><button type="button" class="sm ghost" id="loopClear">Togli</button></div></div>
-          </div>
-          <div class="suggest" id="suggest" hidden></div>
-          <div class="sounds" id="sounds"></div>
         </div>
-      </section>
+      </div>
 
-      <section class="panel" id="stagePanel" hidden>
-        <div class="stage">
-          <div style="min-width:0">
-            <div class="row between"><span class="label">Ora</span><span class="clock" id="clock">0:00</span></div>
-            <div class="nowchord" id="nowChord">—</div>
-            <div class="nextchord" id="realChord" hidden></div>
-            <div class="nextchord">Poi: <b id="nextChord">—</b></div>
-          </div>
-          <div id="diagram"></div>
-        </div>
-        <div class="row between" style="margin-top:10px">
-          <span class="hint" id="keyInfo"></span>
-          <button type="button" class="sm" id="fsBtn">Schermo intero</button>
-        </div>
-      </section>
+      <div class="timeline" id="timeline" title="Tocca per saltare a quel punto">
+        <div class="strip" id="strip"></div>
+        <div class="playhead"></div>
+        <div class="tlempty" id="tlEmpty">Ancora nessun accordo. Apri “Rileva e correggi” e premi “Rileva ascoltando”.</div>
+      </div>
+      <div class="suggest" id="suggest" hidden></div>
 
-      <section class="panel" id="gridPanel" hidden>
+      <div class="segtabs" role="tablist">
+        <button type="button" role="tab" id="tabGridBtn" aria-selected="true" aria-controls="tabGrid">Griglia</button>
+        <button type="button" role="tab" id="tabDetectBtn" aria-selected="false" aria-controls="tabDetect">Rileva e correggi</button>
+      </div>
+
+      <section class="card stack" id="tabGrid" role="tabpanel">
         <div class="row between">
-          <h3>Griglia battute</h3>
+          <div class="row"><span class="subhead">Griglia battute</span><span class="clock" id="bpmInfo"></span></div>
           <div class="row">
-            <span class="clock" id="bpmInfo"></span>
             <button type="button" class="sm" id="tapBtn" title="Tocca a tempo mentre il brano suona">Tap tempo</button>
             <button type="button" class="sm" id="snapBtn">Allinea alle battute</button>
             <button type="button" class="sm" id="copyBtn">Copia accordi</button>
           </div>
         </div>
         <div class="gridwrap" id="gridWrap"><div class="bars" id="bars"></div></div>
-        <p class="hint" id="gridHint" hidden>Per la griglia serve il tempo del brano. Mentre il brano suona, tocca <b>Tap tempo</b> sul primo battito di almeno 4 battute.</p>
+        <p class="hint" id="gridHint" hidden>Per la griglia serve il tempo del brano: mentre suona, tocca <b>Tap tempo</b> sul primo battito di almeno 4 battute.</p>
       </section>
 
-      <section class="panel stack" id="toolsPanel" hidden>
-        <h3>Rilevamento e correzioni</h3>
+      <section class="card stack" id="tabDetect" role="tabpanel" hidden>
         <div id="ytTools" class="stack">
           <div class="row">
-            <button type="button" class="rec" id="listenBtn">● Rileva ascoltando</button>
+            <button type="button" class="rec" id="listenBtn"><svg class="i"><use href="#i-mic"/></svg><span>Rileva ascoltando</span></button>
             <div class="meter" aria-hidden="true"><i id="meter"></i></div>
             <span class="hint" id="listenStatus"></span>
           </div>
-          <p class="notice">Usa gli altoparlanti, non le cuffie: il microfono deve sentire la musica. Mentre il video suona, gli accordi rilevati sostituiscono quelli già scritti in quel tratto, quindi puoi ripassare solo le parti sbagliate.</p>
+          <p class="notice">Usa gli altoparlanti, non le cuffie: il microfono deve sentire la musica. Gli accordi migliorano mentre il brano va avanti e, se riascolti un tratto, lo sostituiscono.</p>
         </div>
         <div id="fileTools" class="stack" hidden>
           <div class="progress" aria-hidden="true"><i id="prog"></i></div>
@@ -315,8 +427,8 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
         </div>
         <div class="row">
           <span class="label">Sincronia</span>
-          <button type="button" class="sm" id="syncEarlier" title="Gli accordi arrivano tardi: anticipali">◀ Anticipa 0,1 s</button>
-          <button type="button" class="sm" id="syncLater" title="Gli accordi arrivano presto: ritardali">Ritarda 0,1 s ▶</button>
+          <button type="button" class="sm" id="syncEarlier">◀ Anticipa 0,1 s</button>
+          <button type="button" class="sm" id="syncLater">Ritarda 0,1 s ▶</button>
           <span class="hint" id="syncInfo"></span>
         </div>
         <div class="row editrow">
@@ -326,15 +438,89 @@ hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}
           <button type="button" class="sm" id="fixInsert">Nuovo accordo da qui</button>
           <button type="button" class="sm ghost danger" id="fixDelete">Togli questo cambio</button>
         </div>
-        <p class="hint">Scrivi gli accordi in tonalità reale, senza capotasto: <code>C</code>, <code>F#m</code>, <code>Bb7</code>, <code>Dsus4</code>, <code>G/B</code> oppure <code>Do</code>, <code>Fa#m</code>, <code>Sib7</code>.</p>
-        <div class="row" id="delRow">
-          <button type="button" class="ghost danger sm" id="delSong">Elimina dalla libreria</button>
-        </div>
+        <p class="hint">Scrivi gli accordi in tonalità reale, senza capotasto: <code>C</code>, <code>F#m</code>, <code>Bb7</code>, <code>G/B</code> oppure <code>Do</code>, <code>Fa#m</code>, <code>Sib7</code>.</p>
       </section>
-    </main>
-  </div>
+
+      <div class="controlbar" id="controlBar">
+        <button type="button" class="playbtn" id="playBtn" aria-label="Play"><svg class="i fill"><use href="#i-play"/></svg></button>
+        <button type="button" class="icon-btn ghost" id="rewBtn" aria-label="Indietro 5 secondi"><svg class="i"><use href="#i-rew"/></svg></button>
+        <button type="button" class="icon-btn ghost" id="fwdBtn" aria-label="Avanti 5 secondi"><svg class="i"><use href="#i-fwd"/></svg></button>
+        <span class="clock" id="clock2">0:00</span>
+        <div class="ctl-chips">
+          <button type="button" class="ctl-chip" id="capoChip">Capo <small id="capoVal">—</small></button>
+          <button type="button" class="ctl-chip" id="keyChip">Tono <small id="tVal">0</small></button>
+          <button type="button" class="ctl-chip" id="speedChip">Velocità <small id="speedVal">100%</small></button>
+          <button type="button" class="ctl-chip" id="loopChip">Loop <small id="loopVal">no</small></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TUNER ============ -->
+  <section class="view" data-view="tuner" hidden>
+    <h2>Accordatore</h2>
+    <div class="card">
+      <div class="tuner">
+        <div class="tnote" id="tNote">—</div>
+        <div class="tscale" aria-hidden="true"><div class="tneedle" id="tNeedle"></div></div>
+        <div class="tticks" aria-hidden="true"><span>−50</span><span>−25</span><span>0</span><span>+25</span><span>+50</span></div>
+        <div class="tinfo" id="tInfo">Premi Avvia e suona una corda</div>
+        <div class="strings" id="tStrings" aria-hidden="true"></div>
+        <button type="button" class="primary" id="tunerBtn"><svg class="i"><use href="#i-mic"/></svg>Avvia accordatore</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="view" data-view="settings" hidden>
+    <h2>Impostazioni</h2>
+    <div class="settings">
+      <div class="card">
+        <div class="label">Aspetto</div>
+        <div class="setrow"><span>Tema</span>
+          <div class="seg" role="group" aria-label="Tema"><button type="button" data-pref="theme" data-val="system">Sistema</button><button type="button" data-pref="theme" data-val="light">Chiaro</button><button type="button" data-pref="theme" data-val="dark">Scuro</button></div></div>
+        <div class="setrow"><span>Notazione</span>
+          <div class="seg" role="group" aria-label="Notazione"><button type="button" data-pref="it" data-val="0">C D E</button><button type="button" data-pref="it" data-val="1">Do Re Mi</button></div></div>
+        <div class="setrow"><span>Diagrammi</span>
+          <div class="seg" role="group" aria-label="Strumento"><button type="button" data-pref="piano" data-val="0">Chitarra</button><button type="button" data-pref="piano" data-val="1">Pianoforte</button></div></div>
+        <div class="setrow"><span>Chitarra per mancini</span>
+          <div class="seg" role="group" aria-label="Mancini"><button type="button" data-pref="lefty" data-val="0">No</button><button type="button" data-pref="lefty" data-val="1">Sì</button></div></div>
+        <div class="setrow"><span>Accordi semplificati</span>
+          <div class="seg" role="group" aria-label="Accordi semplificati"><button type="button" data-pref="simple" data-val="0">No</button><button type="button" data-pref="simple" data-val="1">Sì</button></div></div>
+      </div>
+      <div class="card stack">
+        <div class="label">Libreria</div>
+        <p class="hint">I brani sono salvati in questo browser. Esporta un backup o spostali su un altro dispositivo con Importa.</p>
+        <div class="row">
+          <button type="button" id="exportBtn">Esporta libreria</button>
+          <label class="btn" for="importIn">Importa</label>
+          <input id="importIn" type="file" accept="application/json,.json" hidden>
+        </div>
+        <div class="label" style="margin-top:8px">Ricerca YouTube dentro l'app</div>
+        <input id="apiKey" placeholder="Chiave API YouTube Data v3 (facoltativa)" autocomplete="off" aria-label="Chiave API YouTube">
+        <p class="hint">Senza chiave, la ricerca apre YouTube in una nuova scheda e incolli il link nella barra in alto.</p>
+      </div>
+      <div class="card stack">
+        <div class="label">Scorciatoie da tastiera</div>
+        <p class="hint"><kbd>Spazio</kbd> play/pausa · <kbd>←</kbd> <kbd>→</kbd> 5 secondi · <kbd>A</kbd> <kbd>B</kbd> punti del loop · <kbd>L</kbd> loop sì/no · <kbd>/</kbd> cerca</p>
+        <div class="label" style="margin-top:8px">Installa come app</div>
+        <p class="hint">Dal menu del browser scegli “Aggiungi a schermata Home” o “Installa app”: ChordCapo si apre a schermo pieno come un'app.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="mini" id="mini" hidden>
+  <button type="button" class="playbtn" id="miniPlay" aria-label="Play"><svg class="i fill"><use href="#i-play"/></svg></button>
+  <div class="mt" id="miniOpen" role="button" tabindex="0"><b id="miniTitle"></b><span>Tocca per tornare al brano</span></div>
+  <div class="mc" id="miniChord">—</div>
 </div>
-<div class="toast" id="toast" role="status" hidden></div>
+
+<dialog class="sheet" id="sheet">
+  <div class="sheet-h"><h3 id="sheetTitle"></h3><button type="button" class="icon-btn ghost" id="sheetClose" aria-label="Chiudi"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="sheet-b" id="sheetBody"></div>
+</dialog>
+<div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button type="button" id="toastAct" hidden></button></div>
 
 <script>
 /* ================= music theory ================= */
@@ -569,78 +755,127 @@ function suggestCapo(song){
   return{capo:best,easy:score(best),current:score(song.capo||0)};
 }
 
+
 /* ================= state & storage ================= */
 const KEY='chordcapo-v2';
 let S;try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!S||!Array.isArray(S.songs))S={libs:[{id:'l1',name:'Preferiti'},{id:'l2',name:'Da imparare'}],songs:[],filter:'all',apiKey:''};
-S.prefs=Object.assign({it:false,piano:false,lefty:false,simple:false},S.prefs);
+S.prefs=Object.assign({it:false,piano:false,lefty:false,simple:false,theme:'system'},S.prefs);
+S.sort=S.sort||'recent';
 const P=S.prefs;
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S,(k,v)=>k[0]==='_'?undefined:v))}catch(e){}}
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $=id=>document.getElementById(id);
 const fmt=t=>{t=Math.max(0,t||0);return Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0')};
-let toastT;function toast(msg){$('toast').textContent=msg;$('toast').hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>$('toast').hidden=true,2600)}
+let toastT;
+function toast(msg,action,fn){$('toastMsg').textContent=msg;const b=$('toastAct');b.hidden=!action;
+  if(action){b.textContent=action;b.onclick=()=>{$('toast').hidden=true;fn()}}
+  $('toast').hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>$('toast').hidden=true,action?5000:2600)}
 
-let song=null,src=null,fileUrl=null,loop={a:null,b:null,on:false};
-function persist(){if(song&&S.songs.includes(song))save()}
-function refreshAll(){renderHead();buildStrip();buildGrid();renderRail();lastIdx=-2;lastBeat=null}
+let song=null,src=null,fileUrl=null,loop={a:null,b:null,on:false},speed=1,view='library';
+const isSaved=s=>!!s&&S.songs.includes(s);
+function persist(){if(isSaved(song))save()}
+function refreshAll(){renderHead();buildStrip();buildGrid();renderLibrary();lastIdx=-2;lastBeat=null}
 
-/* ================= preferences ================= */
-function renderPrefs(){document.querySelectorAll('[data-pref]').forEach(b=>b.setAttribute('aria-pressed',String(+!!P[b.dataset.pref]===+b.dataset.val)))}
-document.querySelectorAll('[data-pref]').forEach(b=>b.onclick=()=>{P[b.dataset.pref]=b.dataset.val==='1';save();renderPrefs();if(song)refreshAll()});
-renderPrefs();
-
-/* ================= library rail ================= */
-function renderRail(){
-  const chips=[{id:'all',name:'Tutte'},...S.libs];
-  $('libChips').innerHTML=chips.map(l=>`<button class="chip" type="button" data-lib="${l.id}" aria-pressed="${S.filter===l.id}">${esc(l.name)}</button>`).join('');
-  const f=$('libFilter').value.trim().toLowerCase();
-  const list=S.songs.filter(s=>(S.filter==='all'||s.lib===S.filter)&&(!f||s.title.toLowerCase().includes(f)));
-  $('songList').innerHTML=list.length?list.map(s=>`<li><button type="button" data-song="${s.id}" aria-current="${song===s}">
-    <span style="min-width:0"><span class="t">${esc(s.title)}</span><span class="a">${s.kind==='yt'?'YouTube':'File audio'} · ${s.track.length} accordi${s.capo?' · capo '+s.capo:''}${s.bpm?' · '+Math.round(s.bpm)+' BPM':''}</span></span></button></li>`).join('')
-    :`<li class="empty">${S.songs.length?'Nessun brano corrisponde.':'Nessun brano. Apri un brano e premi “Salva in libreria”.'}</li>`;
-  $('saveLib').innerHTML=S.libs.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
-  if(song&&song.lib)$('saveLib').value=song.lib;
+/* ================= views ================= */
+function go(v){
+  view=v;document.querySelectorAll('[data-view]').forEach(el=>el.hidden=el.dataset.view!==v);
+  document.querySelectorAll('.tab[data-go]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.go===v)));
+  if(v!=='tuner')stopTuner();
+  if(v==='library')renderLibrary();
+  renderMini();window.scrollTo({top:0});
 }
-$('libFilter').oninput=renderRail;
-$('libChips').onclick=e=>{const b=e.target.closest('[data-lib]');if(!b)return;S.filter=b.dataset.lib;save();renderRail()};
-$('songList').onclick=e=>{const b=e.target.closest('[data-song]');if(!b)return;openSong(S.songs.find(s=>s.id===b.dataset.song))};
-$('addLibBtn').onclick=()=>{$('addLibForm').hidden=!$('addLibForm').hidden;if(!$('addLibForm').hidden)$('libName').focus()};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b)go(b.dataset.go)});
+
+/* ================= theme & preferences ================= */
+function applyTheme(){if(P.theme==='system')document.documentElement.removeAttribute('data-theme');else document.documentElement.dataset.theme=P.theme}
+function prefVal(b){return b.dataset.val==='0'?false:b.dataset.val==='1'?true:b.dataset.val}
+function renderPrefs(){document.querySelectorAll('[data-pref]').forEach(b=>b.setAttribute('aria-pressed',String(P[b.dataset.pref]===prefVal(b))))}
+document.querySelectorAll('[data-pref]').forEach(b=>b.onclick=()=>{P[b.dataset.pref]=prefVal(b);save();applyTheme();renderPrefs();if(song)refreshAll();renderTunerStrings()});
+applyTheme();renderPrefs();
+
+/* ================= sheet (bottom sheet / dialog) ================= */
+let sheetRender=null;
+function openSheet(title,render){$('sheetTitle').textContent=title;sheetRender=render;render($('sheetBody'));if(!$('sheet').open)$('sheet').showModal()}
+function rerenderSheet(){if($('sheet').open&&sheetRender)sheetRender($('sheetBody'))}
+function closeSheet(){if($('sheet').open)$('sheet').close()}
+$('sheetClose').onclick=closeSheet;
+$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))closeSheet()});
+$('sheet').addEventListener('close',()=>{sheetRender=null});
+
+/* ================= library ================= */
+const thumbOf=s=>s.kind==='yt'?`<img src="https://i.ytimg.com/vi/${encodeURIComponent(s.ytId)}/mqdefault.jpg" alt="" loading="lazy">`
+  :`<span class="big">${esc(s.track.find(x=>x.c!=='N')?show(s.track.find(x=>x.c!=='N').c):'♪')}</span>`;
+function renderLibrary(){
+  const counts={all:S.songs.length};S.songs.forEach(s=>counts[s.lib]=(counts[s.lib]||0)+1);
+  if(S.filter!=='all'&&!S.libs.some(l=>l.id===S.filter))S.filter='all';
+  $('libChips').innerHTML=[{id:'all',name:'Tutte'},...S.libs].map(l=>`<button class="chip" type="button" data-lib="${l.id}" aria-pressed="${S.filter===l.id}">${esc(l.name)}<span class="n">${counts[l.id]||0}</span></button>`).join('');
+  const f=$('libFilter').value.trim().toLowerCase();
+  let list=S.songs.filter(s=>(S.filter==='all'||s.lib===S.filter)&&(!f||s.title.toLowerCase().includes(f)));
+  if(S.sort==='az')list=list.slice().sort((a,b)=>a.title.localeCompare(b.title,'it'));
+  else if(S.sort==='recent')list=list.slice().sort((a,b)=>(b.lastOpened||0)-(a.lastOpened||0));
+  else list=list.slice().reverse();
+  $('sortSel').value=S.sort;
+  $('libEmpty').hidden=S.songs.length>0;
+  $('songList').innerHTML=list.map(s=>{const k=detectKey(s.track,0);
+    return `<article class="song${song===s?' current':''}">
+    <button type="button" class="song-open" data-song="${s.id}">
+      <div class="thumb">${thumbOf(s)}<div class="badges">${s.capo?`<span class="badge">Capo ${s.capo}</span>`:''}${s.bpm?`<span class="badge">${Math.round(s.bpm)} BPM</span>`:''}</div></div>
+      <div class="song-text"><span class="t">${esc(s.title)}</span><span class="a">${s.kind==='yt'?'YouTube':'File audio'}${k?' · '+esc(noteName(k.root+(s.transpose||0))+(k.minor?'m':'')):''} · ${s.track.length?s.track.length+' accordi':'senza accordi'}</span></div>
+    </button>
+    <button type="button" class="more" data-more="${s.id}" aria-label="Altre azioni per ${esc(s.title)}"><svg class="i"><use href="#i-more"/></svg></button>
+  </article>`}).join('')+(S.songs.length&&!list.length?'<p class="hint">Nessun brano corrisponde al filtro.</p>':'');
+}
+$('libFilter').oninput=renderLibrary;
+$('sortSel').onchange=()=>{S.sort=$('sortSel').value;save();renderLibrary()};
+$('libChips').onclick=e=>{const b=e.target.closest('[data-lib]');if(!b)return;S.filter=b.dataset.lib;save();renderLibrary()};
+$('songList').onclick=e=>{
+  const m=e.target.closest('[data-more]');if(m){songMenu(S.songs.find(s=>s.id===m.dataset.more));return}
+  const b=e.target.closest('[data-song]');if(b){openSong(S.songs.find(s=>s.id===b.dataset.song));go('player')}};
+$('addLibBtn').onclick=()=>{$('addLibForm').hidden=false;$('libName').focus()};
+$('addLibCancel').onclick=()=>{$('addLibForm').hidden=true};
+function createLib(name){const l={id:uid(),name};S.libs.push(l);save();return l}
 $('addLibForm').onsubmit=e=>{e.preventDefault();const n=$('libName').value.trim();if(!n)return;
-  const l={id:uid(),name:n};S.libs.push(l);S.filter=l.id;$('libName').value='';$('addLibForm').hidden=true;save();renderRail();$('saveLib').value=l.id};
-$('saveBtn').onclick=()=>{if(!song)return;song.lib=$('saveLib').value;
-  if(!S.songs.includes(song))S.songs.push(song);save();renderRail();renderHead();toast('Salvato in libreria')};
-$('saveLib').onchange=()=>{if(song&&S.songs.includes(song)){song.lib=$('saveLib').value;save();renderRail()}};
-$('delSong').onclick=()=>{if(!song||!S.songs.includes(song))return;
-  if($('delSong').dataset.armed){S.songs=S.songs.filter(s=>s!==song);save();delete $('delSong').dataset.armed;$('delSong').textContent='Elimina dalla libreria';renderRail();renderHead();toast('Brano eliminato dalla libreria')}
-  else{$('delSong').dataset.armed='1';$('delSong').textContent='Conferma: elimina'}};
+  const l=createLib(n);S.filter=l.id;$('libName').value='';$('addLibForm').hidden=true;save();renderLibrary();toast(`Libreria “${n}” creata`)};
+
+function removeSong(s){const i=S.songs.indexOf(s);if(i<0)return;S.songs.splice(i,1);save();refreshAfterLib();
+  toast('Brano eliminato','Annulla',()=>{S.songs.splice(i,0,s);save();refreshAfterLib()})}
+function refreshAfterLib(){renderLibrary();if(song)renderHead()}
+// library picker used by "Salva" and by the card menu
+function libPicker(body,s,onPick){
+  body.innerHTML=`<div class="optlist">${S.libs.map(l=>`<button type="button" data-pick="${l.id}" aria-pressed="${isSaved(s)&&s.lib===l.id}">${esc(l.name)}<span class="hint">${S.songs.filter(x=>x.lib===l.id).length} brani</span></button>`).join('')}</div>
+    <form class="row" id="pickNew"><input id="pickName" placeholder="Nuova libreria" style="flex:1"><button class="sm" type="submit">Crea e salva</button></form>`;
+  body.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>onPick(b.dataset.pick));
+  body.querySelector('#pickNew').onsubmit=e=>{e.preventDefault();const n=body.querySelector('#pickName').value.trim();if(!n)return;onPick(createLib(n).id)};
+}
+function saveTo(s,libId){s.lib=libId;if(!isSaved(s)){s.added=Date.now();S.songs.push(s)}save();refreshAfterLib();
+  toast(`Salvato in “${(S.libs.find(l=>l.id===libId)||{}).name}”`)}
+function songMenu(s){if(!s)return;
+  openSheet(s.title,body=>{
+    body.innerHTML=`<div class="label">Sposta in</div><div id="mvPick"></div>
+      <div class="label">Rinomina</div><form class="row" id="renForm"><input id="renName" value="${esc(s.title)}" style="flex:1"><button class="sm" type="submit">Rinomina</button></form>
+      <button type="button" class="danger" id="delIt">Elimina dalla libreria</button>`;
+    libPicker(body.querySelector('#mvPick'),s,id=>{saveTo(s,id);closeSheet()});
+    body.querySelector('#renForm').onsubmit=e=>{e.preventDefault();const n=body.querySelector('#renName').value.trim();if(!n)return;s.title=n;s.titleSet=true;save();refreshAfterLib();closeSheet();toast('Brano rinominato')};
+    body.querySelector('#delIt').onclick=()=>{closeSheet();removeSong(s)};
+  });
+}
 $('exportBtn').onclick=()=>{
   const blob=new Blob([JSON.stringify({app:'ChordCapo',version:2,libs:S.libs,songs:S.songs},(k,v)=>k[0]==='_'?undefined:v,1)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chordcapo-libreria.json';document.body.appendChild(a);a.click();
-  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)};
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);toast('Libreria esportata')};
 $('importIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const d=JSON.parse(await f.text());if(!Array.isArray(d.songs))throw 0;
     let n=0;(d.libs||[]).forEach(l=>{if(!S.libs.some(x=>x.id===l.id))S.libs.push(l)});
     d.songs.forEach(s=>{if(Array.isArray(s.track)&&!S.songs.some(x=>x.id===s.id)){S.songs.push(s);n++}});
-    save();renderRail();toast(`Importati ${n} brani`)}
+    save();renderLibrary();toast(`Importati ${n} brani`)}
   catch(err){toast('Questo file non è una libreria ChordCapo')}};
 
-/* ================= YouTube search & links ================= */
+/* ================= search: text or link in one box ================= */
 $('apiKey').value=S.apiKey||'';
-$('apiKey').onchange=()=>{S.apiKey=$('apiKey').value.trim();save()};
+$('apiKey').onchange=()=>{S.apiKey=$('apiKey').value.trim();save();toast(S.apiKey?'Chiave salvata: la ricerca mostra i risultati qui':'Chiave rimossa')};
 function decodeHtml(s){const t=document.createElement('textarea');t.innerHTML=s;return t.value}
-$('searchForm').onsubmit=async e=>{e.preventDefault();const q=$('q').value.trim();if(!q)return;
-  $('searchErr').hidden=true;
-  if(!S.apiKey){window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(q),'_blank','noopener');
-    $('results').innerHTML='<li class="hint">Risultati aperti in una nuova scheda. Copia il link del video e incollalo qui sotto.</li>';return}
-  $('results').innerHTML='<li class="hint">Cerco…</li>';
-  try{const r=await fetch('https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=8&q='+encodeURIComponent(q)+'&key='+encodeURIComponent(S.apiKey));
-    const j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||'errore '+r.status);
-    $('results').innerHTML=j.items.map(it=>`<li><button type="button" class="result" data-id="${esc(it.id.videoId)}" data-title="${esc(decodeHtml(it.snippet.title))}">
-      <img src="${esc(it.snippet.thumbnails.medium.url)}" alt="" loading="lazy"><span style="min-width:0"><span class="t">${esc(decodeHtml(it.snippet.title))}</span><span class="a">${esc(decodeHtml(it.snippet.channelTitle))}</span></span></button></li>`).join('')||'<li class="empty">Nessun risultato.</li>';
-  }catch(err){$('results').innerHTML='';$('searchErr').textContent='Ricerca non riuscita ('+err.message+'). Controlla la chiave API nelle impostazioni.';$('searchErr').hidden=false}};
-$('results').onclick=e=>{const b=e.target.closest('[data-id]');if(!b)return;openYouTube(b.dataset.id,b.dataset.title)};
 function ytId(url){
   url=url.trim();
   try{const u=new URL(url);
@@ -649,12 +884,28 @@ function ytId(url){
       if(u.searchParams.get('v'))return u.searchParams.get('v');
       const m=/^\/(shorts|live|embed)\/([\w-]+)/.exec(u.pathname);if(m)return m[2]}
   }catch(e){}
-  return /^[\w-]{11}$/.test(url)?url:null;
+  return /^[\w-]{11}$/.test(url)&&/\d|[A-Z_-]/.test(url)?url:null;
 }
-$('linkForm').onsubmit=e=>{e.preventDefault();const id=ytId($('link').value);
-  $('searchErr').hidden=!!id;
-  if(!id){$('searchErr').textContent='Questo non sembra un link a un video YouTube.';return}
-  $('link').value='';openYouTube(id,null)};
+async function runSearch(q){
+  const id=ytId(q);if(id){$('q').value='';$('q').blur();openYouTube(id,null);go('player');return}
+  go('library');$('searchArea').hidden=false;$('searchErr').hidden=true;$('resTitle').textContent=`Risultati per “${q}”`;
+  if(!S.apiKey){
+    $('results').innerHTML=`<li class="card stack" style="grid-column:1/-1"><p style="margin:0">Apri la ricerca su YouTube, copia il link del video e incollalo nella barra in alto: il brano si apre da solo.</p>
+      <div class="row"><a class="btn primary" href="https://www.youtube.com/results?search_query=${encodeURIComponent(q)}" target="_blank" rel="noopener">Cerca “${esc(q)}” su YouTube ↗</a>
+      <button type="button" class="ghost sm" data-go="settings">Mostra i risultati qui (chiave API)</button></div></li>`;return}
+  $('results').innerHTML='<li class="hint">Cerco…</li>';
+  try{const r=await fetch('https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=12&q='+encodeURIComponent(q)+'&key='+encodeURIComponent(S.apiKey));
+    const j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||'errore '+r.status);
+    $('results').innerHTML=j.items.map(it=>{const saved=S.songs.find(s=>s.kind==='yt'&&s.ytId===it.id.videoId);
+      return `<li><button type="button" class="result" data-id="${esc(it.id.videoId)}" data-title="${esc(decodeHtml(it.snippet.title))}">
+      <img src="${esc(it.snippet.thumbnails.medium.url)}" alt="" loading="lazy"><span class="t">${esc(decodeHtml(it.snippet.title))}</span><span class="a">${esc(decodeHtml(it.snippet.channelTitle))}${saved?' · già in libreria':''}</span></button></li>`}).join('')||'<li class="hint">Nessun risultato.</li>';
+  }catch(err){$('results').innerHTML='';$('searchErr').textContent='Ricerca non riuscita ('+err.message+'). Controlla la chiave API nelle impostazioni.';$('searchErr').hidden=false}
+}
+$('searchForm').onsubmit=e=>{e.preventDefault();const q=$('q').value.trim();if(q)runSearch(q)};
+$('q').addEventListener('paste',()=>setTimeout(()=>{if(ytId($('q').value))runSearch($('q').value)},0));
+$('results').onclick=e=>{const b=e.target.closest('[data-id]');if(!b)return;openYouTube(b.dataset.id,b.dataset.title);go('player')};
+$('clearResults').onclick=()=>{$('searchArea').hidden=true;$('results').innerHTML='';$('q').value=''};
+$('pasteTile').onclick=()=>{$('q').focus();toast('Scrivi il titolo o incolla il link nella barra in alto')};
 
 /* ================= sources ================= */
 let yt=null,ytReady=false,pendingYt=null;
@@ -665,7 +916,7 @@ function loadYt(id){
   yt=new YT.Player('ytBox',{videoId:id,playerVars:{playsinline:1,rel:0},
     events:{onReady:applySpeed,onStateChange:()=>{
       if(song&&song.kind==='yt'&&!song.titleSet){const d=yt.getVideoData&&yt.getVideoData();
-        if(d&&d.title){song.title=d.title;song.titleSet=true;persist();renderHead();renderRail()}}}}});
+        if(d&&d.title){song.title=d.title;song.titleSet=true;persist();renderHead();renderLibrary()}}}}});
 }
 const ytSrc={time:()=>yt&&yt.getCurrentTime?yt.getCurrentTime():0,
   playing:()=>!!(yt&&yt.getPlayerState&&yt.getPlayerState()===1),
@@ -676,22 +927,24 @@ const ytSrc={time:()=>yt&&yt.getCurrentTime?yt.getCurrentTime():0,
 const au=$('audioEl');au.preservesPitch=true;
 const fileSrc={time:()=>au.currentTime,playing:()=>!au.paused,seek:t=>{au.currentTime=t},
   toggle:()=>{if(!au.src)return;au.paused?au.play():au.pause()},rate:r=>{au.playbackRate=r},duration:()=>au.duration||0};
-function applySpeed(){if(src)src.rate(+$('speed').value)}
-$('speed').onchange=applySpeed;
+function applySpeed(){if(src)src.rate(speed);$('speedVal').textContent=Math.round(speed*100)+'%';$('speedChip').classList.toggle('on',speed!==1)}
 
 function openYouTube(id,title){
   const existing=S.songs.find(s=>s.kind==='yt'&&s.ytId===id);
   openSong(existing||{id:uid(),kind:'yt',ytId:id,title:title||'Video YouTube',titleSet:!!title,track:[],capo:0,transpose:0});
 }
 function openSong(s){
-  stopListening();song=s;loop={a:null,b:null,on:false};
-  $('welcome').hidden=true;['songUi','stagePanel','gridPanel','toolsPanel'].forEach(id=>$(id).hidden=false);
+  if(song!==s)stopListening();
+  song=s;s.lastOpened=Date.now();persist();loop={a:null,b:null,on:false};
+  $('noSong').hidden=true;$('songUi').hidden=false;
   $('ytTools').hidden=s.kind!=='yt';$('fileTools').hidden=s.kind!=='file';
-  if(s.kind==='yt'){au.pause();au.hidden=true;$('mediaBox').hidden=false;src=ytSrc;loadYt(s.ytId)}
+  if(s.kind==='yt'){au.pause();$('fileCard').hidden=true;$('mediaBox').hidden=false;src=ytSrc;loadYt(s.ytId)}
   else{$('mediaBox').hidden=true;try{yt&&yt.pauseVideo&&yt.pauseVideo()}catch(e){}
-    au.hidden=false;src=fileSrc;
-    if(s._fileUrl)au.src=s._fileUrl;
-    else{au.removeAttribute('src');$('fileStatus').textContent='Accordi salvati. Per riascoltare il brano, riapri lo stesso file con “Apri un file audio dal dispositivo”.';$('prog').style.width='0'}}
+    $('fileCard').hidden=false;$('fileName').textContent=s.fileName||s.title;src=fileSrc;
+    if(s._fileUrl){au.src=s._fileUrl;au.hidden=false;$('fileMissing').hidden=true}
+    else{au.removeAttribute('src');au.hidden=true;$('fileMissing').hidden=false;$('fileStatus').textContent='Accordi già rilevati e salvati.';$('prog').style.width='100%'}}
+  // a song without chords opens on the detection tab, otherwise on the grid
+  selectTab(s.track.length?'grid':'detect');
   $('syncInfo').textContent=s.sync?`spostati di ${s.sync>0?'+':''}${s.sync.toFixed(1).replace('.',',')} s`:'';
   applySpeed();refreshAll();
 }
@@ -701,56 +954,92 @@ $('fileIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f
   const isNew=!s;
   if(!s)s={id:uid(),kind:'file',fileName:f.name,fileSize:f.size,title,track:[],capo:0,transpose:0};
   if(fileUrl)URL.revokeObjectURL(fileUrl);fileUrl=URL.createObjectURL(f);s._fileUrl=fileUrl;
-  openSong(s);
+  openSong(s);go('player');
   if(!isNew&&s.track.length){$('fileStatus').textContent='Accordi già rilevati per questo file.';$('prog').style.width='100%';return}
-  $('fileStatus').textContent='Analisi del brano…';
+  selectTab('detect');$('fileStatus').textContent='Analisi del brano…';
   try{const ctx=new (window.AudioContext||window.webkitAudioContext)();
     const buf=await ctx.decodeAudioData(await f.arrayBuffer());ctx.close();
     const r=await analyzeFile(buf,p=>{$('prog').style.width=Math.round(p*100)+'%';$('fileStatus').textContent='Analisi del brano… '+Math.round(p*100)+'%'});
     s.track=r.track;if(r.tempo){s.bpm=r.tempo.bpm;s.beat0=r.tempo.beat0;snapTrack(s)}
-    $('fileStatus').textContent=`Fatto: ${s.track.length} cambi di accordo${s.bpm?', tempo circa '+Math.round(s.bpm)+' BPM':''}${Math.abs(r.tune)>.08?`, registrazione accordata ${r.tune>0?'+':''}${Math.round(r.tune*100)} cent rispetto al La 440`:''}. Premi play.`;
-    persist();if(song===s)refreshAll();
+    $('fileStatus').textContent=`Fatto: ${s.track.length} cambi di accordo${s.bpm?', tempo circa '+Math.round(s.bpm)+' BPM':''}${Math.abs(r.tune)>.08?`, registrazione accordata ${r.tune>0?'+':''}${Math.round(r.tune*100)} cent rispetto al La 440`:''}.`;
+    persist();if(song===s){refreshAll();selectTab('grid')}
+    toast('Accordi pronti: premi play');
   }catch(err){$('fileStatus').textContent='Non riesco a leggere questo file audio. Prova con un mp3, m4a o wav.'}
 };
 
-/* ================= header, capo, suggestions ================= */
-$('capo').innerHTML=Array.from({length:10},(_,i)=>`<option value="${i}">${i?i+'º tasto':'Nessuno'}</option>`).join('');
+/* ================= player header & control chips ================= */
 const shiftN=()=>(song.transpose||0)-(song.capo||0);
+const libName=id=>(S.libs.find(l=>l.id===id)||{}).name||'libreria';
 function renderHead(){
   if(!song)return;
-  const saved=S.songs.includes(song);
-  $('songKind').textContent=(song.kind==='yt'?'YouTube':'File audio')+(saved?' · in '+((S.libs.find(l=>l.id===song.lib)||{}).name||'libreria'):' · non salvato');
+  const saved=isSaved(song);
+  $('songKind').textContent=song.kind==='yt'?'YouTube':'File audio';
   $('songTitle').textContent=song.title;
-  $('saveBtn').textContent=saved?'Salvato ✓':'Salva in libreria';$('saveBtn').disabled=saved;
-  $('delRow').hidden=!saved;
-  $('capo').value=song.capo||0;
-  const tr=song.transpose||0;$('tVal').textContent=(tr>0?'+':'')+tr;
+  $('saveLabel').textContent=saved?libName(song.lib):'Salva';
+  $('saveBtn').classList.toggle('primary',!saved);
+  $('saveBtn').setAttribute('aria-label',saved?`Salvato in ${libName(song.lib)}: cambia libreria`:'Salva in libreria');
+  $('capoVal').textContent=song.capo?song.capo+'º':'no';$('capoChip').classList.toggle('on',!!song.capo);
+  const tr=song.transpose||0;$('tVal').textContent=(tr>0?'+':'')+tr;$('keyChip').classList.toggle('on',!!tr);
+  $('loopVal').textContent=loop.on?fmt(loop.a)+'–'+fmt(loop.b):(loop.a!==null?'A '+fmt(loop.a):'no');$('loopChip').classList.toggle('on',loop.on);
   const sug=suggestCapo(song);
   if(sug&&sug.capo!==(song.capo||0)&&sug.easy>sug.current+.1){
     $('suggest').hidden=false;
-    $('suggest').innerHTML=`<span>Capo consigliato: <b>${sug.capo?sug.capo+'º tasto':'nessuno'}</b>. ${Math.round(sug.easy*100)}% del brano con accordi aperti (ora ${Math.round(sug.current*100)}%).</span><button type="button" class="sm primary" id="useCapo">Usa</button>`;
-    $('useCapo').onclick=()=>{song.capo=sug.capo;persist();refreshAll()};
+    $('suggest').innerHTML=`<span class="grow">Con il <b>capo al ${sug.capo}º tasto</b> suoni ${Math.round(sug.easy*100)}% del brano con accordi aperti (ora ${Math.round(sug.current*100)}%).</span><button type="button" class="sm primary" id="useCapo">Usa capo ${sug.capo}</button><button type="button" class="sm ghost" id="noCapo">No, grazie</button>`;
+    $('useCapo').onclick=()=>{song.capo=sug.capo;persist();refreshAll();toast(`Capo al ${sug.capo}º tasto`)};
+    $('noCapo').onclick=()=>{$('suggest').hidden=true};
   }else $('suggest').hidden=true;
   const key=detectKey(song.track,src?src.duration():0);
   if(key){const real=noteName(key.root+tr)+(key.minor?' minore':' maggiore');
-    $('keyInfo').innerHTML=`Tonalità stimata: <b>${esc(real)}</b>${song.capo?` · forme in ${esc(noteName(key.root+shiftN())+(key.minor?' minore':' maggiore'))}`:''}`}
+    $('keyInfo').innerHTML=`Tonalità <b>${esc(real)}</b>${song.capo?` · forme in ${esc(noteName(key.root+shiftN())+(key.minor?' minore':' maggiore'))}`:''}`}
   else $('keyInfo').textContent='';
-  $('loopToggle').setAttribute('aria-pressed',String(loop.on));
+  rerenderSheet();
 }
-$('capo').onchange=()=>{song.capo=+$('capo').value;persist();refreshAll()};
-$('tDown').onclick=()=>{song.transpose=Math.max(-6,(song.transpose||0)-1);persist();refreshAll()};
-$('tUp').onclick=()=>{song.transpose=Math.min(6,(song.transpose||0)+1);persist();refreshAll()};
+$('saveBtn').onclick=()=>{if(!song)return;openSheet(isSaved(song)?'Sposta in un\'altra libreria':'Salva in libreria',body=>{
+  libPicker(body,song,id=>{saveTo(song,id);closeSheet()});
+  if(isSaved(song)){const d=document.createElement('button');d.type='button';d.className='danger';d.textContent='Elimina dalla libreria';d.onclick=()=>{closeSheet();removeSong(song)};body.appendChild(d)}})};
+$('capoChip').onclick=()=>openSheet('Capotasto',body=>{
+  const sug=suggestCapo(song);
+  body.innerHTML=`<div class="optgrid">${Array.from({length:10},(_,i)=>`<button type="button" data-capo="${i}" aria-pressed="${(song.capo||0)===i}">${i||'No'}</button>`).join('')}</div>
+    ${sug&&sug.capo?`<p class="hint">Consigliato: <b>${sug.capo}º tasto</b> (${Math.round(sug.easy*100)}% accordi aperti).</p>`:''}
+    <p class="hint">Con il capotasto vedi le forme da suonare; sotto l'accordo trovi quello che suona davvero.</p>`;
+  body.querySelectorAll('[data-capo]').forEach(b=>b.onclick=()=>{song.capo=+b.dataset.capo;persist();refreshAll()})});
+$('keyChip').onclick=()=>openSheet('Tonalità',body=>{
+  const tr=song.transpose||0;
+  body.innerHTML=`<div class="bigstep"><button type="button" id="tDown" aria-label="Abbassa di un semitono">−</button><output>${(tr>0?'+':'')+tr}</output><button type="button" id="tUp" aria-label="Alza di un semitono">+</button></div>
+    <p class="hint" style="text-align:center">Sposta tutti gli accordi di un semitono alla volta, per cantare più comodo.</p>
+    ${tr?'<button type="button" class="ghost" id="tReset">Torna alla tonalità originale</button>':''}`;
+  body.querySelector('#tDown').onclick=()=>{song.transpose=Math.max(-6,tr-1);persist();refreshAll()};
+  body.querySelector('#tUp').onclick=()=>{song.transpose=Math.min(6,tr+1);persist();refreshAll()};
+  const r=body.querySelector('#tReset');if(r)r.onclick=()=>{song.transpose=0;persist();refreshAll()}});
+$('speedChip').onclick=()=>openSheet('Velocità',body=>{
+  body.innerHTML=`<div class="optgrid">${[.5,.75,1,1.25,1.5].map(v=>`<button type="button" data-speed="${v}" aria-pressed="${speed===v}">${v*100}%</button>`).join('')}</div>
+    <p class="hint">Rallenta per imparare i cambi: l'intonazione non cambia.</p>`;
+  body.querySelectorAll('[data-speed]').forEach(b=>b.onclick=()=>{speed=+b.dataset.speed;applySpeed();rerenderSheet()})});
+$('loopChip').onclick=()=>openSheet('Loop',body=>{
+  body.innerHTML=`<div class="row"><button type="button" class="grow" id="lA">Inizio qui (A)${loop.a!==null?' · '+fmt(loop.a):''}</button><button type="button" class="grow" id="lB">Fine qui (B)${loop.b!==null?' · '+fmt(loop.b):''}</button></div>
+    <div class="row"><button type="button" id="lOn" aria-pressed="${loop.on}" ${loop.a===null||loop.b===null?'disabled':''}>Ripeti il tratto</button><button type="button" class="ghost" id="lClr">Togli loop</button></div>
+    <p class="hint">Durante la riproduzione tocca A all'inizio del passaggio e B alla fine: il tratto si ripete finché non lo togli. Da tastiera: <kbd>A</kbd> <kbd>B</kbd> <kbd>L</kbd>.</p>`;
+  body.querySelector('#lA').onclick=()=>setLoop('a');body.querySelector('#lB').onclick=()=>setLoop('b');
+  body.querySelector('#lOn').onclick=()=>{loop.on=!loop.on;renderHead()};
+  body.querySelector('#lClr').onclick=()=>{loop={a:null,b:null,on:false};renderHead();buildStrip();buildGrid()}});
+$('playBtn').onclick=()=>src&&src.toggle();
+$('miniPlay').onclick=()=>src&&src.toggle();
+$('miniOpen').onclick=()=>go('player');
+$('miniOpen').onkeydown=e=>{if(e.key==='Enter')go('player')};
+$('rewBtn').onclick=()=>src&&src.seek(Math.max(0,src.time()-5));
+$('fwdBtn').onclick=()=>src&&src.seek(src.time()+5);
+function selectTab(t){$('tabGrid').hidden=t!=='grid';$('tabDetect').hidden=t!=='detect';
+  $('tabGridBtn').setAttribute('aria-selected',String(t==='grid'));$('tabDetectBtn').setAttribute('aria-selected',String(t==='detect'))}
+$('tabGridBtn').onclick=()=>selectTab('grid');$('tabDetectBtn').onclick=()=>selectTab('detect');
+function renderMini(){const show2=!!song&&view!=='player';$('mini').hidden=!show2;if(show2)$('miniTitle').textContent=song.title}
 
 /* ================= loop ================= */
 function setLoop(which){if(!src)return;const t=+src.time().toFixed(2);loop[which]=t;
   if(loop.a!==null&&loop.b!==null){if(loop.b<loop.a)[loop.a,loop.b]=[loop.b,loop.a];loop.on=loop.b-loop.a>.3}
   toast(which==='a'?'Inizio loop: '+fmt(t):'Fine loop: '+fmt(t));renderHead();buildStrip();buildGrid()}
-$('loopA').onclick=()=>setLoop('a');$('loopB').onclick=()=>setLoop('b');
-$('loopToggle').onclick=()=>{if(loop.a===null||loop.b===null){toast('Imposta prima i punti A e B');return}loop.on=!loop.on;renderHead()};
-$('loopClear').onclick=()=>{loop={a:null,b:null,on:false};renderHead();buildStrip();buildGrid()};
 
 /* ================= timeline ================= */
-const PPS=70;
+const PPS=72;
 function buildStrip(){
   if(!song)return;const tr=song.track;$('tlEmpty').hidden=tr.length>0;
   const dur=Math.max(src?src.duration():0,tr.length?tr[tr.length-1].t+4:0);const n=shiftN();
@@ -769,8 +1058,8 @@ function buildGrid(){
   if(!song)return;
   const ok=!!song.bpm&&song.track.length>0;$('gridHint').hidden=ok||!song.track.length;
   $('bpmInfo').textContent=song.bpm?Math.round(song.bpm)+' BPM':'';
-  $('snapBtn').disabled=!song.bpm;
-  if(!ok){$('bars').innerHTML=song.track.length?'':'<p class="empty" style="padding:8px">La griglia compare quando ci sono accordi e il tempo del brano.</p>';return}
+  $('snapBtn').disabled=!song.bpm;$('copyBtn').disabled=!song.track.length;
+  if(!ok){$('bars').innerHTML=song.track.length?'':'<p class="hint" style="grid-column:1/-1;padding:8px 0">La griglia compare quando ci sono accordi: apri “Rileva e correggi”.</p>';return}
   const B=60/song.bpm,b0=song.beat0||0;gridDur=src?src.duration():0;
   const end=Math.max(gridDur,song.track[song.track.length-1].t+4*B);
   const k0=Math.ceil((0-b0)/B-1e-6),k1=Math.floor((end-b0)/B);
@@ -794,7 +1083,7 @@ $('tapBtn').onclick=()=>{if(!src||!song)return;const t=src.time();
   taps=taps.filter(x=>t-x<2.5&&t>x);taps.push(t);
   if(taps.length<4){toast(`Continua a toccare… (${taps.length}/4)`);return}
   const iv=(taps[taps.length-1]-taps[0])/(taps.length-1);
-  song.bpm=+(60/iv).toFixed(1);song.beat0=+(t%iv).toFixed(3);persist();buildGrid();renderRail();toast('Tempo: '+Math.round(song.bpm)+' BPM')};
+  song.bpm=+(60/iv).toFixed(1);song.beat0=+(t%iv).toFixed(3);persist();buildGrid();renderLibrary();toast('Tempo: '+Math.round(song.bpm)+' BPM')};
 $('snapBtn').onclick=()=>{snapTrack(song);persist();refreshAll();toast('Accordi allineati alle battute')};
 $('copyBtn').onclick=async()=>{
   if(!song||!song.track.length)return;const n=shiftN();let txt=song.title+(song.capo?` (capo ${song.capo})`:'')+'\n\n';
@@ -804,33 +1093,35 @@ $('copyBtn').onclick=async()=>{
   try{await navigator.clipboard.writeText(txt);toast('Accordi copiati')}catch(e){toast('Copia non riuscita')}};
 
 /* ================= render loop ================= */
-let lastIdx=-2,lastBeat=null,wakeLock=null;
+let lastIdx=-2,lastBeat=null,wakeLock=null,lastPlaying=null;
+const ICON_PLAY='<svg class="i fill"><use href="#i-play"/></svg>',ICON_PAUSE='<svg class="i fill"><use href="#i-pause"/></svg>';
 function frame(){
   if(song&&src){
     let t=src.time();
     if(loop.on&&loop.a!==null&&loop.b!==null&&t>=loop.b&&src.playing()){src.seek(loop.a);t=loop.a}
-    $('clock').textContent=fmt(t);
-    $('strip').style.transform=`translateX(${$('timeline').clientWidth*.3-t*PPS}px)`;
+    const ct=fmt(t)+(src.duration()?' / '+fmt(src.duration()):'');
+    $('clock').textContent=fmt(t);$('clock2').textContent=ct;
+    const pl=src.playing();
+    if(pl!==lastPlaying){[$('playBtn'),$('miniPlay')].forEach(b=>{b.innerHTML=pl?ICON_PAUSE:ICON_PLAY;b.setAttribute('aria-label',pl?'Pausa':'Play')});lastPlaying=pl}
+    if(view==='player')$('strip').style.transform=`translateX(${$('timeline').clientWidth*.3-t*PPS}px)`;
     if(song.bpm&&src.duration()&&Math.abs(src.duration()-gridDur)>1)buildGrid();
     const i=idxAt(t);
     if(i!==lastIdx){
       const prev=$('strip').querySelector('.blk.cur');if(prev)prev.classList.remove('cur');
       const el=$('strip').querySelector(`[data-i="${i}"]`);if(el)el.classList.add('cur');
       const n=shiftN();const c=i>=0?song.track[i].c:'N';const sc=shiftC(c,n,P.simple);
-      $('nowChord').textContent=show(sc);
+      $('nowChord').textContent=show(sc);$('miniChord').textContent=show(sc);
       $('realChord').hidden=!song.capo||c==='N';
       if(song.capo&&c!=='N')$('realChord').innerHTML=`Forma con capo ${song.capo} · suona come <b>${esc(show(shiftC(c,song.transpose||0,P.simple)))}</b>`;
       const nx=song.track.slice(i+1).find(x=>x.c!=='N');
       $('nextChord').textContent=nx?show(shiftC(nx.c,n,P.simple)):'—';
       $('diagram').innerHTML=c!=='N'?diagram(sc):'';
-      $('sounds').innerHTML=song.capo?`Con capo ${song.capo} suoni le forme mostrate${c!=='N'?`; l'accordo reale è <b>${esc(show(shiftC(c,song.transpose||0,P.simple)))}</b>`:''}.`
-        :(song.transpose?`Tonalità spostata di ${song.transpose>0?'+':''}${song.transpose} semitoni.`:'Accordi nella tonalità originale.');
       lastIdx=i}
     if(song.bpm){const k=Math.floor((t-(song.beat0||0))/(60/song.bpm)+1e-6);
       if(k!==lastBeat){const p=$('bars').querySelector('.beat.cur');if(p)p.classList.remove('cur');
         const b=$('bars').querySelector(`[data-k="${k}"]`);
         if(b){b.classList.add('cur');const w=$('gridWrap'),bar=b.parentElement;
-          if(bar.offsetTop<w.scrollTop||bar.offsetTop+bar.offsetHeight>w.scrollTop+w.clientHeight)w.scrollTop=bar.offsetTop-40}
+          if(!$('tabGrid').hidden&&(bar.offsetTop<w.scrollTop||bar.offsetTop+bar.offsetHeight>w.scrollTop+w.clientHeight))w.scrollTop=bar.offsetTop-40}
         lastBeat=k}}
   }
   requestAnimationFrame(frame);
@@ -839,17 +1130,19 @@ requestAnimationFrame(frame);
 $('fsBtn').onclick=async()=>{const el=$('stagePanel');
   try{if(document.fullscreenElement){await document.exitFullscreen()}else{await el.requestFullscreen();wakeLock=await navigator.wakeLock?.request('screen')}}
   catch(e){toast('Schermo intero non disponibile su questo dispositivo')}};
-document.addEventListener('fullscreenchange',()=>{$('fsBtn').textContent=document.fullscreenElement?'Esci':'Schermo intero';if(!document.fullscreenElement&&wakeLock){wakeLock.release().catch(()=>{});wakeLock=null}});
+document.addEventListener('fullscreenchange',()=>{$('fsBtn').querySelector('span').textContent=document.fullscreenElement?'Esci':'Schermo intero';if(!document.fullscreenElement&&wakeLock){wakeLock.release().catch(()=>{});wakeLock=null}});
 
 /* ================= keyboard ================= */
 document.addEventListener('keydown',e=>{
-  if(!src||!song||e.ctrlKey||e.metaKey||e.altKey||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
+  if(e.ctrlKey||e.metaKey||e.altKey||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)||$('sheet').open)return;
+  if(e.key==='/'){e.preventDefault();$('q').focus();return}
+  if(!src||!song)return;
   if(e.code==='Space'&&e.target.tagName!=='BUTTON'){e.preventDefault();src.toggle()}
   else if(e.key==='ArrowLeft'){src.seek(Math.max(0,src.time()-5))}
   else if(e.key==='ArrowRight'){src.seek(src.time()+5)}
   else if(e.key==='a'||e.key==='A')setLoop('a');
   else if(e.key==='b'||e.key==='B')setLoop('b');
-  else if(e.key==='l'||e.key==='L')$('loopToggle').click();
+  else if(e.key==='l'||e.key==='L'){if(loop.a!==null&&loop.b!==null){loop.on=!loop.on;renderHead();toast(loop.on?'Loop attivo':'Loop in pausa')}}
 });
 
 /* ================= manual corrections ================= */
@@ -871,7 +1164,8 @@ function shiftTrack(d){if(!song||!song.track.length)return;
   persist();refreshAll()}
 $('syncEarlier').onclick=()=>shiftTrack(-.1);
 $('syncLater').onclick=()=>shiftTrack(.1);
-$('fixDelete').onclick=()=>{if(!src)return;const i=idxAt(src.time());if(i<0)return;song.track.splice(i,1);changed()};
+$('fixDelete').onclick=()=>{if(!src)return;const i=idxAt(src.time());if(i<0)return;const old=song.track.slice();song.track.splice(i,1);changed();
+  toast('Cambio tolto','Annulla',()=>{song.track=old;changed()})};
 
 /* ================= microphone: shared ================= */
 async function openMic(){return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}
@@ -882,6 +1176,7 @@ async function openMic(){return navigator.mediaDevices.getUserMedia({audio:{echo
    more of the song is heard and re-listening a passage replaces it. */
 let L=null;
 const MIC_DELAY=.3; // analysis window centre + audio output/input latency, in seconds
+function setListenUi(on){$('listenBtn').classList.toggle('on',on);$('listenBtn').querySelector('span').textContent=on?'Ferma rilevamento':'Rileva ascoltando';$('tabPlayer').classList.toggle('live',on)}
 async function startListening(){
   stopTuner();
   try{
@@ -890,13 +1185,12 @@ async function startListening(){
     const an=ctx.createAnalyser();an.fftSize=16384;an.smoothingTimeConstant=0;
     ctx.createMediaStreamSource(stream).connect(an);
     L={stream,ctx,an,db:new Float32Array(an.frequencyBinCount),mag:new Float32Array(an.frequencyBinCount),frames:new Map(),ticks:0,lastT:null};
-    L.timer=setInterval(listenTick,100);
-    $('listenBtn').classList.add('on');$('listenBtn').textContent='■ Ferma rilevamento';
+    L.timer=setInterval(listenTick,100);setListenUi(true);
     $('listenStatus').textContent=src.playing()?'Ascolto…':'Avvia il video: inizio ad ascoltare quando parte.';
   }catch(err){$('listenStatus').textContent='Microfono non disponibile. Consenti l\'accesso al microfono nel browser e riprova.'}
 }
 function stopListening(){if(!L)return;clearInterval(L.timer);applyListened();L.stream.getTracks().forEach(t=>t.stop());L.ctx.close();L=null;
-  $('listenBtn').classList.remove('on');$('listenBtn').textContent='● Rileva ascoltando';$('listenStatus').textContent='';$('meter').style.width='0';
+  setListenUi(false);$('listenStatus').textContent='';$('meter').style.width='0';
   if(song){persist();refreshAll()}}
 $('listenBtn').onclick=()=>L?stopListening():startListening();
 function listenTick(){
@@ -932,24 +1226,25 @@ function applyListened(){
     const mid=dec.filter((x,i)=>!(i===0&&x.c===prevC));
     song.track=[...before,...mid,...after]}
   song.track=song.track.filter((x,i,arr)=>i===0||x.c!==arr[i-1].c);
-  persist();buildStrip();lastIdx=-2;if(L.ticks%30===0){buildGrid();renderRail()}
+  persist();buildStrip();lastIdx=-2;if(L.ticks%30===0){buildGrid();renderLibrary()}
 }
 
-/* tuner */
+/* ================= tuner ================= */
 let T=null;
 const STRINGS=[40,45,50,55,59,64];
+function renderTunerStrings(hit){$('tStrings').innerHTML=STRINGS.map(m=>`<span class="${m===hit?'hit':''}">${noteName(m%12)}</span>`).join('')}
+renderTunerStrings();
 async function startTuner(){
   if(L)stopListening();
   try{const stream=await openMic();const ctx=new (window.AudioContext||window.webkitAudioContext)();
     const an=ctx.createAnalyser();an.fftSize=2048;ctx.createMediaStreamSource(stream).connect(an);
     T={stream,ctx,an,buf:new Float32Array(an.fftSize),hist:[]};T.timer=setInterval(tunerTick,80);
-    $('tunerBtn').textContent='Ferma accordatore';$('tInfo').textContent='Suona una corda alla volta'}
+    $('tunerBtn').lastChild.textContent='Ferma accordatore';$('tInfo').textContent='Suona una corda alla volta'}
   catch(e){$('tInfo').textContent='Microfono non disponibile. Consenti l\'accesso e riprova.'}
 }
 function stopTuner(){if(!T)return;clearInterval(T.timer);T.stream.getTracks().forEach(t=>t.stop());T.ctx.close();T=null;
-  $('tunerBtn').textContent='Avvia accordatore';$('tNote').textContent='—';$('tInfo').textContent='Premi Avvia e suona una corda';$('tNeedle').style.left='50%'}
+  $('tunerBtn').lastChild.textContent='Avvia accordatore';$('tNote').textContent='—';$('tInfo').textContent='Premi Avvia e suona una corda';$('tNeedle').style.left='50%';renderTunerStrings()}
 $('tunerBtn').onclick=()=>T?stopTuner():startTuner();
-$('tunerBox').addEventListener('toggle',()=>{if(!$('tunerBox').open)stopTuner()});
 function pitch(buf,sr){
   let rms=0;for(const v of buf)rms+=v*v;rms=Math.sqrt(rms/buf.length);if(rms<.01)return null;
   const n=buf.length,half=n>>1,d=new Float32Array(half);
@@ -968,11 +1263,14 @@ function tunerTick(){
   $('tNote').textContent=noteName(near%12)+(Math.floor(near/12)-1);
   $('tNeedle').style.left=(50+Math.max(-50,Math.min(50,cents)))+'%';
   $('tNeedle').classList.toggle('ok',Math.abs(cents)<=5);
-  $('tInfo').textContent=`${fm.toFixed(1)} Hz · ${cents>0?'+':''}${cents} cent · corda più vicina: ${noteName(str%12)}${Math.floor(str/12)-1}${Math.abs(cents)<=5?' · intonata':cents<0?' · tira su':' · allenta'}`;
+  renderTunerStrings(str);
+  $('tInfo').textContent=`${fm.toFixed(1)} Hz · ${cents>0?'+':''}${cents} cent · ${Math.abs(cents)<=5?'intonata':cents<0?'tira su':'allenta'}`;
 }
 
+/* ================= start ================= */
 window.addEventListener('pagehide',()=>persist());
-renderRail();
+renderLibrary();go('library');
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>

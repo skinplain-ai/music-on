@@ -20,11 +20,22 @@ Accordi che scorrono insieme al brano, con capotasto, trasposizione, diagrammi p
 
 La ricerca dentro l'app è facoltativa e richiede una chiave gratuita di YouTube Data API v3, da inserire nelle impostazioni. Senza chiave, la ricerca apre YouTube in una nuova scheda.
 
+## Interfaccia
+
+- **Quattro sezioni**: Libreria, Suona, Accordatore e Impostazioni. Su telefono sono in una barra in basso, come in un'app.
+- **Una sola barra di ricerca**: scrivi un titolo oppure incolla un link YouTube, che si apre subito.
+- **Libreria a schede** con copertina del video, capo e BPM. Puoi filtrarla per libreria o per titolo, ordinarla e, dal menu ⋯ di ogni brano, spostarlo, rinominarlo o eliminarlo (con *Annulla*).
+- **Comandi sempre a portata**: play, ±5 s, Capo, Tono, Velocità e Loop sono in una barra fissa e si regolano da pannelli che salgono dal basso.
+- **Mini-player**: quando esci dal brano, l'accordo attuale resta visibile e puoi mettere in pausa.
+- **Tema** chiaro, scuro o automatico.
+- **Installabile**: dal browser si aggiunge alla schermata Home e si apre a schermo pieno, anche offline.
+
 ## Pubblicarla
 
-È un'unica pagina, `index.html`, senza bisogno di build. Deve essere servita in https perché il player YouTube e il microfono funzionino:
+L'app è fatta di `index.html` più tre piccoli file per l'installazione: `manifest.webmanifest`, `sw.js` e `icon.svg`. Pubblica la cartella intera (funziona anche solo `index.html`, ma senza l'installazione come app). Il sito deve essere servito in https perché il player YouTube e il microfono funzionino:
 
 - **GitHub Pages**: Settings → Pages → Deploy from a branch → scegli il branch e la cartella `/ (root)`.
+- **Netlify Drop**: trascina la cartella con i quattro file su app.netlify.com/drop.
 - **In locale**: `python3 -m http.server`, poi apri `http://localhost:8000`.
 
 L'audio dei video YouTube non viene scaricato né estratto: il rilevamento ascolta la musica dal microfono, come un'app di riconoscimento musicale.
